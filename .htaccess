@@ -1,0 +1,16 @@
+# ---------------------------------------------------------------------------
+# Encaminha todas as requisicoes para a pasta public/ (front controller do Laravel).
+#
+# Util em hospedagem compartilhada onde NAO e possivel apontar o dominio
+# diretamente para a pasta public/ (ex.: docroot fixo = raiz do projeto).
+#
+# Se o seu dominio JA aponta para public/, este arquivo fica acima do docroot
+# e simplesmente nao e lido — pode mante-lo sem efeito colateral.
+# ---------------------------------------------------------------------------
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+
+    # Nao reescrever se ja estiver dentro de public/
+    RewriteCond %{REQUEST_URI} !^/public/
+    RewriteRule ^(.*)$ public/$1 [L]
+</IfModule>
