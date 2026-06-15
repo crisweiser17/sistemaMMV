@@ -145,8 +145,8 @@ class DemoSeeder extends Seeder
             'mao_de_obra' => 'Laser', 'quantidade' => 2, 'fase' => 'Corte']);
         $engSvc->finalizar($h3);
 
-        // Gera um PDF de Output para o header 1 (historico de versoes)
-        $outputSvc->gerarPdf($h1->fresh(), $eng->id);
+        // Gera um PDF de Output para a demanda do PI1 (o output e por DEMANDA, agrupando os itens).
+        $outputSvc->gerarPdf($demandaPi1->fresh(), $eng->id);
 
         $this->command?->info('Demonstração criada: 2 cotações, 3 PIs, demandas, engenharia detalhada e 1 PDF.');
     }
