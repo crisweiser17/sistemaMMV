@@ -171,6 +171,29 @@ function buildEnv(array $c): string
     return $out;
 }
 
+/**
+ * Verifica se o vendor/ instalado corresponde ao projeto (Laravel 11+).
+ * Retorna [ok, mensagem, versao].
+ */
+function installedLaravel(string $base): array
+{
+    $auto = $base . '/vendor/autoload.php';
+    if (!is_file($auto)) {
+        return [false, 'vendor/ ausente — rode "composer install" no servidor', null];
+    }
+    require_once $auto;
+    if (!class_exists(\Illuminate\Foundation\Application::class)) {
+        return [false, 'Laravel nao encontrado em vendor/ — rode "composer install"', null];
+    }
+    $ver = (string) \Illuminate\Foundation\Application::VERSION;
+    $ok = method_exists(\Illuminate\Foundation\Application::class, 'configure')
+        && version_compare($ver, '11.0', '>=');
+    $msg = $ok
+        ? 'Dependencias OK (Laravel ' . $ver . ')'
+        : 'vendor/ incompativel (Laravel ' . $ver . ') — rode "composer install" para instalar a versao do projeto';
+    return [$ok, $msg, $ver];
+}
+
 /** Inicializa o framework para rodar comandos Artisan dentro da requisicao. */
 function bootLaravel(string $base)
 {
@@ -263,6 +286,15 @@ if ($step === 'run' && $_SERVER['REQUEST_METHOD'] === 'POST' && $BASE && !$alrea
             throw new RuntimeException('Nao foi possivel escrever o arquivo .env na raiz do projeto.');
         }
         $log[] = ['.env gerado com APP_KEY', true];
+
+        // ---- Verifica se vendor/ corresponde ao projeto (evita "Application::configure does not exist") ----
+        [$lvOk, $lvMsg] = installedLaravel($BASE);
+        $log[] = [$lvMsg, $lvOk];
+        if (!$lvOk) {
+            throw new RuntimeException(
+                $lvMsg . '. Conecte por SSH na pasta da aplicacao e rode: composer install --no-dev --optimize-autoloader'
+            );
+        }
 
         // ---- Boot do Laravel + migrations + seed ----
         $app = bootLaravel($BASE);
@@ -515,6 +547,20 @@ if ($step === 'run' && $_SERVER['REQUEST_METHOD'] === 'POST' && $BASE && !$alrea
                 </li>
             <?php endforeach; ?>
         </ul>
+    </div>
+
+    <div class="card">
+        <h2>Dependencias (vendor/)</h2>
+        <?php [$lvOk, $lvMsg] = installedLaravel($BASE); if (!$lvOk) { $blocker = true; } ?>
+        <ul class="checks">
+            <li><span class="pill <?= $lvOk ? 'ok' : 'err' ?>"><?= $lvOk ? 'OK' : 'CORRIGIR' ?></span> <?= h($lvMsg) ?></li>
+        </ul>
+        <?php if (!$lvOk): ?>
+            <div class="hint" style="margin-top:10px">
+                Conecte por SSH na pasta da aplicacao e rode:
+                <code>composer install --no-dev --optimize-autoloader</code>
+            </div>
+        <?php endif; ?>
     </div>
 
     <div class="card">
