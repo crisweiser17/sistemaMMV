@@ -300,8 +300,10 @@ if ($step === 'run' && $_SERVER['REQUEST_METHOD'] === 'POST' && $BASE && !$alrea
         $app = bootLaravel($BASE);
         Illuminate\Support\Facades\Artisan::call('config:clear');
 
-        Illuminate\Support\Facades\Artisan::call('migrate', ['--force' => true]);
-        $log[] = ['Migrations executadas', true];
+        // migrate:fresh dropa tabelas pre-existentes via SQL (evita "table already exists"
+        // quando ja houve uma tentativa anterior ou um migrate manual). Instalacao = banco limpo.
+        Illuminate\Support\Facades\Artisan::call('migrate:fresh', ['--force' => true]);
+        $log[] = ['Banco recriado e migrations executadas', true];
 
         Illuminate\Support\Facades\Artisan::call('db:seed', ['--force' => true]);
         $log[] = ['Dados essenciais (perfis, status, unidades...) inseridos', true];
