@@ -51,7 +51,7 @@ function requirements(): array
 {
     $ext = fn (string $e) => extension_loaded($e);
     return [
-        ['PHP >= 8.4 (atual: ' . PHP_VERSION . ')', version_compare(PHP_VERSION, '8.4.1', '>='), true],
+        ['PHP >= 8.2 (atual: ' . PHP_VERSION . ')', version_compare(PHP_VERSION, '8.2.0', '>='), true],
         ['Extensao OpenSSL', $ext('openssl'), true],
         ['Extensao PDO', $ext('pdo'), true],
         ['Extensao Mbstring', $ext('mbstring'), true],
