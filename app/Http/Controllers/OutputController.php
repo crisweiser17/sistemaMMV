@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Demanda;
+use App\Services\AlteracaoService;
 use App\Services\OutputService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -12,12 +13,18 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class OutputController extends Controller
 {
-    public function __construct(private OutputService $service) {}
+    public function __construct(
+        private OutputService $service,
+        private AlteracaoService $alteracoes,
+    ) {}
 
-    /** Preview HTML do PI (todos os itens da demanda) antes de gerar o PDF. */
+    /**
+     * Preview HTML do PI (todos os itens da demanda) antes de gerar o PDF.
+     * Unico lugar que pede o destaque das alteracoes: o PDF sai sempre limpo.
+     */
     public function preview(Demanda $demanda): View
     {
-        return view('output.pi', $this->service->montarDados($demanda));
+        return view('output.pi', $this->service->montarDados($demanda, destacarAlteracoes: true));
     }
 
     public function gerar(Request $request, Demanda $demanda): RedirectResponse
@@ -42,5 +49,16 @@ class OutputController extends Controller
         $numeroReferencia = $demanda->headers()->first()?->numero_referencia ?? ('Demanda #'.$demanda->id);
 
         return view('output.historico', compact('demanda', 'numeroReferencia'));
+    }
+
+    /** Historico do que mudou depois do ultimo PDF (campo, de, para, data, usuario). */
+    public function alteracoes(Demanda $demanda): View
+    {
+        $this->authorize('ver', 'engenharia');
+
+        return view('output.alteracoes', [
+            'demanda' => $demanda,
+            'numeroReferencia' => $this->alteracoes->numeroDoProcesso($demanda),
+        ] + $this->alteracoes->historico($demanda));
     }
 }

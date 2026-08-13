@@ -9,10 +9,11 @@ use App\Models\LiberacaoAnexo;
 use App\Models\LiberacaoItem;
 use App\Models\LiberacaoItemAnexo;
 use App\Models\UnidadeMedida;
+use App\Services\AnexoService;
+use App\Services\ClienteUnidadeService;
 use App\Services\LiberacaoService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Storage;
 use Illuminate\View\View;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
@@ -23,9 +24,11 @@ class LiberacaoController extends Controller
     public function index(Request $request): View
     {
         $liberacoes = Liberacao::query()
-            ->with(['cliente', 'escopo'])
+            // itens vem junto: a coluna NF compara a NF de cada item com a do PI.
+            ->with(['cliente', 'unidade', 'escopo', 'itens'])
             ->when($request->filled('cliente_id'), fn ($q) => $q->where('cliente_id', $request->integer('cliente_id')))
-            ->when($request->filled('busca'), fn ($q) => $q->where('numero_pi', 'like', '%'.$request->string('busca').'%'))
+            ->when($request->filled('unidade_id'), fn ($q) => $q->where('unidade_id', $request->integer('unidade_id')))
+            ->when($request->filled('busca'), fn ($q) => $this->service->aplicarBusca($q, trim((string) $request->string('busca'))))
             ->latest()->paginate(15)->withQueryString();
 
         return view('liberacao.index', [
@@ -53,7 +56,8 @@ class LiberacaoController extends Controller
 
     public function show(Liberacao $liberacao): View
     {
-        $liberacao->load(['cliente', 'escopo', 'itens.unidade', 'itens.anexos', 'anexos', 'autor']);
+        // itens.liberacao: o acessor nf_efetiva do item cai no PI quando o item nao tem NF.
+        $liberacao->load(['cliente', 'unidade', 'escopo', 'itens.unidade', 'itens.anexos', 'itens.liberacao', 'anexos', 'autor']);
 
         return view('liberacao.show', compact('liberacao'));
     }
@@ -80,7 +84,7 @@ class LiberacaoController extends Controller
     {
         $this->authorize('editar', 'liberacao');
         abort_unless($item->liberacao_id === $liberacao->id, 404);
-        $request->validate(['arquivo' => 'required|file|max:20480']);
+        $request->validate(AnexoService::regras(), AnexoService::mensagens());
 
         $this->service->adicionarAnexoItem($item, $request->file('arquivo'));
 
@@ -90,7 +94,7 @@ class LiberacaoController extends Controller
     public function anexo(Request $request, Liberacao $liberacao): RedirectResponse
     {
         $this->authorize('editar', 'liberacao');
-        $request->validate(['arquivo' => 'required|file|max:20480']);
+        $request->validate(AnexoService::regras(), AnexoService::mensagens());
 
         $this->service->adicionarAnexoGeral($liberacao, $request->file('arquivo'));
 
@@ -102,9 +106,9 @@ class LiberacaoController extends Controller
     {
         $this->authorize('ver', 'liberacao');
         abort_unless($anexo->liberacao_id === $liberacao->id, 404);
-        abort_unless(Storage::exists($anexo->path), 404);
+        abort_unless(AnexoService::disco()->exists($anexo->path), 404);
 
-        return Storage::response($anexo->path, $anexo->nome_arquivo);
+        return AnexoService::disco()->response($anexo->path, $anexo->nome_arquivo);
     }
 
     public function removeAnexo(Liberacao $liberacao, LiberacaoAnexo $anexo): RedirectResponse
@@ -122,9 +126,9 @@ class LiberacaoController extends Controller
     {
         $this->authorize('ver', 'liberacao');
         abort_unless($anexo->item?->liberacao_id === $liberacao->id, 404);
-        abort_unless(Storage::exists($anexo->path), 404);
+        abort_unless(AnexoService::disco()->exists($anexo->path), 404);
 
-        return Storage::response($anexo->path, $anexo->nome_arquivo);
+        return AnexoService::disco()->response($anexo->path, $anexo->nome_arquivo);
     }
 
     public function removeAnexoItem(Liberacao $liberacao, LiberacaoItemAnexo $anexo): RedirectResponse
@@ -154,15 +158,30 @@ class LiberacaoController extends Controller
             'numero_pi' => 'nullable|string|max:100',
             'numero_pc' => 'nullable|string|max:100',
             'cliente_id' => 'nullable|exists:clientes,id',
+            'unidade_id' => ClienteUnidadeService::regraDeValidacao($request->integer('cliente_id')),
             'escopo_id' => 'nullable|exists:escopos,id',
             'data_pedido' => 'nullable|date',
             'nf_cliente' => 'nullable|string|max:100',
             'data_entrega_cliente' => 'nullable|date',
             'observacoes' => 'nullable|string',
             'itens' => 'array',
+            // ATENCAO: validate() devolve SO as chaves com regra declarada. Todo campo de
+            // item que o service grava precisa aparecer aqui, senao e descartado em silencio.
+            // O 'id' e o mais critico: sem ele a sincronizacao recria o item em vez de
+            // atualizar, perdendo anexos e historico de auditoria.
+            'itens.*.id' => 'nullable|integer',
+            'itens.*.numero_item' => 'nullable|integer|min:1',
+            'itens.*.cod_mmv' => 'nullable|string|max:255',
+            'itens.*.ni' => 'nullable|string|max:255',
             'itens.*.descricao' => 'nullable|string',
             'itens.*.quantidade' => 'nullable|numeric|min:0',
+            'itens.*.unidade_id' => 'nullable|exists:unidades_medida,id',
+            'itens.*.material_cliente' => 'nullable|string|max:255',
+            // NF do item: quando preenchida sobrescreve a NF do PI para aquele item.
+            'itens.*.nf_cliente' => 'nullable|string|max:100',
             'itens.*.prazo_entrega_item' => 'nullable|integer|min:0',
+            'itens.*.descricao_cliente' => 'nullable|string',
+            'itens.*.observacoes' => 'nullable|string',
         ]);
 
         $itens = $validated['itens'] ?? [];

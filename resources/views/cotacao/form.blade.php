@@ -10,7 +10,11 @@
 
 @section('content')
 <form method="POST" action="{{ $cotacao->exists ? route('cotacao.update', $cotacao) : route('cotacao.store') }}"
-      x-data="{ ...itemsRepeater(@js($itensIniciais), @js($template)), ...niLookup() }"
+      x-data="{
+                  ...itemsRepeater(@js($itensIniciais), @js($template)), ...niLookup(), ...unidadesDoCliente(),
+                  unidadeAtual: @js(old('unidade_id', $cotacao->unidade_id)),
+                  init() { return this.carregarUnidades(@js($cotacao->cliente_id)); }
+              }"
       @submit="if (!validar()) { $event.preventDefault(); window.mmvToast('Cada item precisa de descrição e quantidade.', 'error'); }">
     @csrf
     @if ($cotacao->exists) @method('PUT') @endif
@@ -19,7 +23,21 @@
         <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
             <x-input label="Número" name="numero" :value="$cotacao->numero" />
             <x-input label="Número do Cliente" name="numero_cliente" :value="$cotacao->numero_cliente" />
-            <x-select label="Cliente" name="cliente_id" :options="$clientes->toArray()" :value="$cotacao->cliente_id" />
+            <x-select label="Cliente" name="cliente_id" :options="$clientes->toArray()" :value="$cotacao->cliente_id"
+                      @change="unidadeAtual = ''; carregarUnidades($event.target.value)" />
+            {{-- Unidade do cliente: as opcoes vem do lookup JSON conforme o cliente escolhido. --}}
+            <label class="block">
+                <span class="block text-sm font-medium text-gray-700 mb-1">Unidade</span>
+                {{-- Sem disabled: cliente sem unidades precisa enviar vazio e limpar o vinculo. --}}
+                <select name="unidade_id"
+                        class="w-full rounded-md border-gray-300 shadow-sm focus:border-accent-500 focus:ring-accent-500 text-sm">
+                    <option value="">Selecione...</option>
+                    <template x-for="u in unidades" :key="u.id">
+                        <option :value="u.id" :selected="String(u.id) === String(unidadeAtual)" x-text="u.nome"></option>
+                    </template>
+                </select>
+                @error('unidade_id')<span class="block text-xs text-red-600 mt-1">{{ $message }}</span>@enderror
+            </label>
             <x-select label="Escopo" name="escopo_id" :options="$escopos->toArray()" :value="$cotacao->escopo_id" />
             <x-input label="Data da Cotação" name="data_cotacao" type="date" :value="optional($cotacao->data_cotacao)->format('Y-m-d')" />
             <x-input label="Prazo de Resposta" name="prazo_resposta" type="date" :value="optional($cotacao->prazo_resposta)->format('Y-m-d')" />
@@ -44,9 +62,11 @@
                     <th class="py-2 px-2 w-24">Qtd</th><th class="py-2 px-2 w-24">Un.</th>
                     <th class="py-2 px-2">Mat. Cliente</th><th class="py-2 px-2 w-10"></th>
                 </tr></thead>
-                <tbody>
-                    <template x-for="(item, idx) in itens" :key="item._key">
-                        <tr class="border-b">
+                {{-- Um <tbody> por item: a 1a linha e a grade principal, a 2a guarda os campos
+                     descritivos, que nao cabem na largura da tabela. --}}
+                <template x-for="(item, idx) in itens" :key="item._key">
+                    <tbody class="border-b">
+                        <tr>
                             <td class="py-1 px-2 text-gray-500" x-text="idx + 1"></td>
                             <td class="py-1 px-2"><input type="hidden" :name="`itens[${idx}][id]`" :value="item.id">
                                 <input :name="`itens[${idx}][numero_item]`" type="hidden" :value="idx + 1">
@@ -68,8 +88,21 @@
                             <td class="py-1 px-2 text-center">
                                 <button type="button" @click="remove(item._key)" class="text-red-500 hover:text-red-700" title="Remover">&times;</button></td>
                         </tr>
-                    </template>
-                </tbody>
+                        {{-- Campos descritivos do item. Aparecem no cabecalho do item na
+                             Engenharia e na folha de processo. --}}
+                        <tr>
+                            <td></td>
+                            <td colspan="7" class="pb-2 px-2">
+                                <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
+                                    <label class="block"><span class="block text-xs text-gray-500 mb-0.5">Descrição do cliente</span>
+                                        <input :name="`itens[${idx}][descricao_cliente]`" x-model="item.descricao_cliente" class="w-full rounded border-gray-300 text-sm"></label>
+                                    <label class="block"><span class="block text-xs text-gray-500 mb-0.5">Observações do item</span>
+                                        <input :name="`itens[${idx}][observacoes]`" x-model="item.observacoes" class="w-full rounded border-gray-300 text-sm"></label>
+                                </div>
+                            </td>
+                        </tr>
+                    </tbody>
+                </template>
             </table>
         </div>
 

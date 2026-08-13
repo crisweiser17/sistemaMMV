@@ -11,18 +11,23 @@ use App\Models\Escopo;
 use App\Models\StatusEngenharia;
 use App\Models\UnidadeMedida;
 use App\Models\User;
+use App\Services\AlteracaoService;
+use App\Services\AnexoService;
 use App\Services\EngenhariaService;
 use App\Services\GanttService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Storage;
+use Illuminate\Validation\Rule;
 use Illuminate\View\View;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class EngenhariaController extends Controller
 {
-    public function __construct(private EngenhariaService $service) {}
+    public function __construct(
+        private EngenhariaService $service,
+        private AlteracaoService $alteracoes,
+    ) {}
 
     public function index(Request $request): View
     {
@@ -45,12 +50,13 @@ class EngenhariaController extends Controller
 
         $busca = trim((string) $request->string('busca'));
         $clienteId = $request->integer('cliente_id');
+        $unidadeId = $request->integer('unidade_id');
         $statusId = $request->integer('status_id');
         $responsavelId = $request->integer('responsavel_id');
 
-        // Filtro de headers (itens): autorizacao + busca/cliente/status/responsavel.
+        // Filtro de headers (itens): autorizacao + busca/cliente/unidade/status/responsavel.
         // Aplicado no whereHas (quais cotacoes aparecem) e no eager-load (quais itens mostrar).
-        $filtroHeaders = function ($q) use ($apenasDoUsuario, $user, $busca, $clienteId, $statusId, $responsavelId) {
+        $filtroHeaders = function ($q) use ($apenasDoUsuario, $user, $busca, $clienteId, $unidadeId, $statusId, $responsavelId) {
             if ($apenasDoUsuario) {
                 $q->where('responsavel_id', $user->id);
             } elseif ($responsavelId) {
@@ -58,6 +64,9 @@ class EngenhariaController extends Controller
             }
             if ($clienteId) {
                 $q->where('cliente_id', $clienteId);
+            }
+            if ($unidadeId) {
+                $q->where('unidade_id', $unidadeId);
             }
             if ($statusId) {
                 $q->where('status_id', $statusId);
@@ -74,27 +83,37 @@ class EngenhariaController extends Controller
             ->whereHas('headers', $filtroHeaders)
             ->when($request->filled('tipo'), fn ($q) => $q->where('tipo', $request->string('tipo')))
             ->with([
-                'headers' => fn ($q) => $filtroHeaders($q)->with(['status', 'cliente', 'itemCotacao.unidade']),
+                // Carrega as duas origens possiveis do item (PI e cotacao): so uma delas vem preenchida.
+                'headers' => fn ($q) => $filtroHeaders($q)->with(['status', 'cliente', 'unidade', 'itemCotacao.unidade', 'itemLiberacao.unidade', 'itemLiberacao.liberacao']),
             ])
             ->latest()->get();
 
-        $data = $demandas->map(function ($d) {
+        // Marcacao "ALTERADO" resolvida em lote para a lista inteira (ver AlteracaoService).
+        $marcadas = $this->alteracoes->marcadas($demandas);
+
+        $data = $demandas->map(function ($d) use ($marcadas) {
             $primeiro = $d->headers->first();
 
             return [
                 'id' => $d->id,
                 'tipo' => $d->tipo,
                 'numero_referencia' => $primeiro?->numero_referencia ?? ('Demanda #'.$d->id),
-                'cliente' => $primeiro?->cliente?->nome,
+                'cliente' => $primeiro?->cliente_com_unidade,
                 'qtd_itens' => $d->headers->count(),
                 'detalhar_url' => route('engenharia.demanda', $d),
-                'itens' => $d->headers->map(fn ($h) => [
-                    'nome_item' => $h->nome_item,
-                    'cod_mmv' => $h->itemCotacao?->cod_mmv,
-                    'quantidade' => $h->itemCotacao?->quantidade,
-                    'unidade' => $h->itemCotacao?->unidade?->sigla,
-                    'status' => $h->status ? ['nome' => $h->status->nome, 'cor_hex' => $h->status->cor_hex] : null,
-                ])->values(),
+                'alterado' => $marcadas[$d->id] ?? false,
+                'alteracoes_url' => route('output.alteracoes', $d),
+                'itens' => $d->headers->map(function ($h) {
+                    $item = $h->dadosItemOrigem();
+
+                    return [
+                        'nome_item' => $h->nome_item,
+                        'cod_mmv' => $item['cod_mmv'],
+                        'quantidade' => $item['quantidade'],
+                        'unidade' => $item['unidade'],
+                        'status' => $h->status ? ['nome' => $h->status->nome, 'cor_hex' => $h->status->cor_hex] : null,
+                    ];
+                })->values(),
             ];
         });
 
@@ -109,7 +128,7 @@ class EngenhariaController extends Controller
 
         $headers = $demanda->headers()
             ->when($apenasDoUsuario, fn ($q) => $q->where('responsavel_id', $user->id))
-            ->with(['status', 'cliente', 'itemCotacao.unidade'])
+            ->with(['status', 'cliente', 'unidade', 'itemCotacao.unidade', 'itemLiberacao.unidade', 'itemLiberacao.liberacao'])
             ->orderBy('id')
             ->get();
 
@@ -121,30 +140,40 @@ class EngenhariaController extends Controller
             'demanda' => $demanda,
             'headers' => $headers,
             'numeroReferencia' => $headers->first()->numero_referencia,
-            'cliente' => $headers->first()->cliente ?? $referencia?->cliente,
+            // Rotulo "Cliente – Unidade" do header; cai para o PI/cotacao quando o header nao tem cliente.
+            'clienteRotulo' => $headers->first()->cliente_com_unidade ?? $referencia?->cliente_com_unidade,
             'escopos' => Escopo::orderBy('descricao')->pluck('descricao', 'id'),
             'unidades' => UnidadeMedida::orderBy('sigla')->pluck('sigla', 'id'),
             'categorias' => CategoriaComponente::orderBy('nome')->get(),
+            // Atalho para o historico aparece so quando ha alteracao pos-PDF.
+            'alteracoes' => $this->alteracoes->mapa($demanda),
         ]);
     }
 
     /** JSON: linhas do header (liveResource). */
     public function linhas(EngenhariaHeader $header): JsonResponse
     {
-        $linhas = $header->linhas()->with(['material', 'dependencias:id,numero_linha'])->get()
+        $linhas = $header->linhas()->with(['material.tipo.categoria', 'dependencias:id,numero_linha'])->get()
             ->map(fn ($l) => [
                 'id' => $l->id,
                 'numero_linha' => $l->numero_linha,
                 'cod_mmv' => $l->cod_mmv,
                 'descricao' => $l->descricao,
                 'tipo_componente' => $l->tipo_componente,
-                'material' => $l->material?->descricao,
+                // IDs alem dos rotulos: o formulario precisa deles para remontar os selects encadeados na edicao.
+                'categoria_componente_id' => $l->categoria_componente_id,
+                'tipo_componente_id' => $l->tipo_componente_id,
+                'material_id' => $l->material_id,
+                // Rotulo completo vindo do Cadastro (categoria, dimensoes e norma juntas).
+                'material' => $l->material?->especificacao_completa,
                 'mao_de_obra' => $l->mao_de_obra,
                 'quantidade' => $l->quantidade,
                 'duracao_dias' => $l->duracao_dias,
+                // Observacao livre da linha: aparece na tela e e impressa na folha de processo.
+                'observacao' => $l->observacao,
                 'fase' => $l->fase,
                 'status' => $l->status,
-                'arquivo_nome' => $l->arquivo_path ? \Illuminate\Support\Str::after(basename($l->arquivo_path), '_') : null,
+                'arquivo_nome' => $l->arquivo_path ? AnexoService::nomeOriginal($l->arquivo_path) : null,
                 'dependencias' => $l->dependencias->pluck('numero_linha'),
             ]);
 
@@ -155,6 +184,7 @@ class EngenhariaController extends Controller
     {
         $this->authorize('editar', 'engenharia');
         $linha = $this->service->adicionarLinha($header, $this->validar($request));
+        $this->aplicarDependencias($request, $linha);
 
         return response()->json(['ok' => true, 'id' => $linha->id]);
     }
@@ -165,14 +195,25 @@ class EngenhariaController extends Controller
         abort_unless($linha->header_id === $header->id, 404);
 
         $this->service->atualizarLinha($linha, $this->validar($request));
-
-        // Dependencias informadas como lista de numeros de linha (ex.: "2,3")
-        if ($request->filled('dependencias')) {
-            $numeros = array_filter(array_map('intval', explode(',', (string) $request->input('dependencias'))));
-            $this->service->definirDependenciasPorNumeros($linha, $numeros);
-        }
+        $this->aplicarDependencias($request, $linha);
 
         return response()->json(['ok' => true]);
+    }
+
+    /**
+     * Dependencias informadas como lista de numeros de linha (ex.: "2,3").
+     * Vale tanto na criacao quanto na edicao — o formulario manda o campo nas duas.
+     * Campo presente e vazio limpa as dependencias; campo ausente nao mexe nelas.
+     */
+    private function aplicarDependencias(Request $request, EngenhariaLinha $linha): void
+    {
+        if (! $request->has('dependencias')) {
+            return;
+        }
+
+        $numeros = array_filter(array_map('intval', explode(',', (string) $request->input('dependencias'))));
+
+        $this->service->definirDependenciasPorNumeros($linha, $numeros);
     }
 
     public function delLinha(EngenhariaHeader $header, EngenhariaLinha $linha): JsonResponse
@@ -196,6 +237,33 @@ class EngenhariaController extends Controller
         return response()->json(['ok' => true]);
     }
 
+    /** JSON: itens concluidos que podem servir de molde para a copia de estrutura. */
+    public function estruturas(Request $request, EngenhariaHeader $header): JsonResponse
+    {
+        $this->authorize('editar', 'engenharia');
+        $dados = $request->validate(['busca' => 'nullable|string|max:100']);
+
+        return response()->json([
+            'data' => $this->service->estruturasCopiaveis($header, (string) ($dados['busca'] ?? '')),
+        ]);
+    }
+
+    /** Copia as linhas (e dependencias) de um item concluido para este item. */
+    public function copiarEstrutura(Request $request, EngenhariaHeader $header): JsonResponse
+    {
+        $this->authorize('editar', 'engenharia');
+        $dados = $request->validate([
+            // notIn: copiar do proprio item duplicaria as linhas em vez de reaproveitar outra estrutura.
+            'origem_id' => ['required', 'integer', 'exists:engenharia_headers,id', Rule::notIn([$header->id])],
+            'modo' => ['required', Rule::in([EngenhariaService::MODO_ACRESCENTAR, EngenhariaService::MODO_SUBSTITUIR])],
+        ]);
+
+        $origem = EngenhariaHeader::findOrFail($dados['origem_id']);
+        $copiadas = $this->service->copiarEstrutura($header, $origem, $dados['modo']);
+
+        return response()->json(['ok' => true, 'linhas' => $copiadas]);
+    }
+
     public function finalizar(EngenhariaHeader $header): RedirectResponse
     {
         $this->authorize('editar', 'engenharia');
@@ -213,7 +281,7 @@ class EngenhariaController extends Controller
     {
         $this->authorize('editar', 'engenharia');
         abort_unless($linha->header_id === $header->id, 404);
-        $request->validate(['arquivo' => 'required|file|max:20480']);
+        $request->validate(AnexoService::regras(), AnexoService::mensagens());
 
         $this->service->anexarArquivoLinha($linha, $request->file('arquivo'));
 
@@ -225,9 +293,9 @@ class EngenhariaController extends Controller
     {
         $this->authorize('ver', 'engenharia');
         abort_unless($linha->header_id === $header->id, 404);
-        abort_unless($linha->arquivo_path && Storage::exists($linha->arquivo_path), 404);
+        abort_unless($linha->arquivo_path && AnexoService::disco()->exists($linha->arquivo_path), 404);
 
-        return Storage::response($linha->arquivo_path, \Illuminate\Support\Str::after(basename($linha->arquivo_path), '_'));
+        return AnexoService::disco()->response($linha->arquivo_path, AnexoService::nomeOriginal($linha->arquivo_path));
     }
 
     public function removerArquivo(EngenhariaHeader $header, EngenhariaLinha $linha): JsonResponse

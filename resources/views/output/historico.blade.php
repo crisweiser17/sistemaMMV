@@ -5,6 +5,8 @@
 <x-card :title="'Histórico de PDFs — ' . $numeroReferencia">
     <x-slot:actions>
         <x-button variant="secondary" :href="route('engenharia.demanda', $demanda)">← Voltar à engenharia</x-button>
+        {{-- O que mudou DEPOIS do PDF vive em tela propria; aqui fica so o atalho. --}}
+        <x-button variant="secondary" :href="route('output.alteracoes', $demanda)">⚠ Alterações após o PDF</x-button>
         @can('editar', 'engenharia')
             <form method="POST" action="{{ route('output.gerar', $demanda) }}">@csrf<x-button type="submit">Gerar novo PDF</x-button></form>
         @endcan

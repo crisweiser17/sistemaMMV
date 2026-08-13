@@ -78,6 +78,8 @@ class DemandaService
                         'demanda_id' => $demanda->id,
                         'responsavel_id' => $responsavelId,
                         'cliente_id' => $referencia->cliente_id,
+                        // O header herda a unidade do PI/cotacao de origem.
+                        'unidade_id' => $referencia->unidade_id,
                         'numero_referencia' => $referencia->numero_pi ?? $referencia->numero ?? ('#'.$referencia->id),
                         'nome_item' => $item->descricao,
                         'data_alocacao' => now()->toDateString(),

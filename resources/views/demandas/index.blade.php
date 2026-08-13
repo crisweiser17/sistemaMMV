@@ -4,12 +4,19 @@
 @section('content')
 <div x-data="Object.assign(
         liveResource({ url: '{{ route('demandas.data') }}', channel: 'demandas', events: ['.demanda.atualizada'] }),
+        unidadesDoCliente(),
         {
-            filtros: { responsavel_id: '', status_id: '', tipo: '', busca: '' },
+            filtros: { responsavel_id: '', status_id: '', tipo: '', busca: '', cliente_id: '', unidade_id: '' },
             podeEditar: {{ auth()->user()->can('editar', 'demandas') ? 'true' : 'false' }},
             alocarModal: { aberto: false, demandaId: null, responsavel_id: '' },
             expandida: null,
             aplicar() { this.load(this.filtros); },
+            // Trocar de cliente zera a unidade e recarrega as opcoes daquele cliente.
+            async trocarCliente() {
+                this.filtros.unidade_id = '';
+                await this.carregarUnidades(this.filtros.cliente_id);
+                this.aplicar();
+            },
             abrirAlocar(id) { this.alocarModal = { aberto: true, demandaId: id, responsavel_id: '' }; },
             async confirmarAlocacao() {
                 try {
@@ -62,6 +69,17 @@
                 <option value="liberacao">Liberação</option>
                 <option value="cotacao">Cotação</option>
             </select>
+            <select x-model="filtros.cliente_id" @change="trocarCliente()" class="rounded-md border-gray-300 text-sm">
+                <option value="">Todos clientes</option>
+                @foreach ($clientes as $id => $nome)<option value="{{ $id }}">{{ $nome }}</option>@endforeach
+            </select>
+            {{-- O select de unidade reflete o cliente selecionado (lookup JSON). --}}
+            <select x-model="filtros.unidade_id" @change="aplicar()" :disabled="!unidades.length" class="rounded-md border-gray-300 text-sm">
+                <option value="">Todas unidades</option>
+                <template x-for="u in unidades" :key="u.id">
+                    <option :value="u.id" x-text="u.nome"></option>
+                </template>
+            </select>
             <input x-model.debounce.400ms="filtros.busca" @input="aplicar()" placeholder="Buscar nº PI/cotação"
                    class="rounded-md border-gray-300 text-sm w-56">
         </div>
@@ -83,7 +101,13 @@
                             <td class="py-2 pr-3"><button @click="expandida = expandida === d.id ? null : d.id" class="text-gray-400 hover:text-gray-700" x-text="expandida === d.id ? '▾' : '▸'"></button></td>
                             <td class="py-2 pr-3" x-text="d.data_entrada"></td>
                             <td class="py-2 pr-3 capitalize" x-text="d.tipo"></td>
-                            <td class="py-2 pr-3 font-medium" x-text="d.numero_referencia"></td>
+                            <td class="py-2 pr-3 font-medium">
+                                <span x-text="d.numero_referencia"></span>
+                                {{-- Processo que mudou depois do ultimo PDF do PI: discreto, mas inconfundivel. --}}
+                                <a x-show="d.alterado" x-cloak :href="d.alteracoes_url"
+                                   title="Alterado após o último PDF — ver o que mudou"
+                                   class="ml-1 inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-semibold bg-red-100 text-red-700 border border-red-300 hover:bg-red-200">ALTERADO</a>
+                            </td>
                             <td class="py-2 pr-3" x-text="d.qtd_itens"></td>
                             <td class="py-2 pr-3" x-text="d.prazo_cotacao != null ? d.prazo_cotacao + ' dias' : '—'"></td>
                             <td class="py-2 pr-3" x-text="d.prazo_fabricacao != null ? d.prazo_fabricacao + ' dias' : '—'"></td>

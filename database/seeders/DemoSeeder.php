@@ -4,6 +4,7 @@ namespace Database\Seeders;
 
 use App\Models\CategoriaComponente;
 use App\Models\Cliente;
+use App\Models\ClienteUnidade;
 use App\Models\Demanda;
 use App\Models\Escopo;
 use App\Models\Liberacao;
@@ -45,6 +46,11 @@ class DemoSeeder extends Seeder
         $clientes = Cliente::pluck('id', 'nome');
         $escopos = Escopo::pluck('id', 'descricao');
         $un = fn (string $sigla) => UnidadeMedida::where('sigla', $sigla)->value('id');
+        // Unidade (planta) do cliente — ex.: unidadeDe('Suzano SA', 'Tres Lagoas')
+        $unidadeDe = fn (string $cliente, string $nome) => ClienteUnidade::query()
+            ->where('cliente_id', $clientes[$cliente] ?? 0)
+            ->where('nome', $nome)
+            ->value('id');
 
         $catMP = CategoriaComponente::where('tipo', 'materia_prima')->first();
         $tipoMP = TipoComponente::where('categoria_id', $catMP?->id)->first();
@@ -54,6 +60,7 @@ class DemoSeeder extends Seeder
         // ---------------- COTACOES ----------------
         $cotacaoSvc->criar(
             ['numero' => 'COT-2026-101', 'numero_cliente' => 'RFQ-559', 'cliente_id' => $clientes['Vale S.A.'] ?? null,
+             'unidade_id' => $unidadeDe('Vale S.A.', 'Carajas'),
              'escopo_id' => $escopos['Recuperacao'] ?? null, 'data_cotacao' => now()->subDays(10)->toDateString(),
              'prazo_resposta' => now()->subDays(3)->toDateString(), 'observacoes' => 'Cotação para recuperação de eixo do britador.'],
             [
@@ -64,7 +71,8 @@ class DemoSeeder extends Seeder
         );
 
         $cotacaoSvc->criar(
-            ['numero' => 'COT-2026-102', 'cliente_id' => $clientes['Gerdau'] ?? null, 'escopo_id' => $escopos['Fabricacao'] ?? null,
+            ['numero' => 'COT-2026-102', 'cliente_id' => $clientes['Gerdau'] ?? null,
+             'unidade_id' => $unidadeDe('Gerdau', 'Ouro Branco'), 'escopo_id' => $escopos['Fabricacao'] ?? null,
              'data_cotacao' => now()->subDays(6)->toDateString(), 'observacoes' => 'Fabricação de chute de transferência.'],
             [
                 ['numero_item' => 1, 'cod_mmv' => 'MMV-CH-10', 'ni' => 'NI-7720', 'descricao' => 'Chute revestido em chapa', 'quantidade' => 2, 'unidade_id' => $un('PC')],
@@ -76,11 +84,14 @@ class DemoSeeder extends Seeder
         // PI 1 — sera alocado e detalhado (fluxo completo + PDF)
         $pi1 = $liberacaoSvc->criar(
             ['numero_pi' => 'PI-DEMO-1038', 'numero_pc' => 'PC-88231', 'cliente_id' => $clientes['Vale S.A.'] ?? null,
+             'unidade_id' => $unidadeDe('Vale S.A.', 'Carajas'),
              'escopo_id' => $escopos['Fabricacao'] ?? null, 'data_pedido' => now()->subDays(5)->toDateString(),
              'nf_cliente' => 'NF-12045', 'observacoes' => 'Prioridade alta — parada de manutenção programada.'],
             [
+                // Itens 1 e 3 sem NF propria: herdam a NF-12045 do PI.
                 ['numero_item' => 1, 'cod_mmv' => 'MMV-EX-01', 'ni' => 'NI-4501', 'descricao' => 'Eixo principal usinado', 'quantidade' => 1, 'unidade_id' => $un('PC'), 'prazo_entrega_item' => 30],
-                ['numero_item' => 2, 'cod_mmv' => 'MMV-MA-05', 'ni' => 'NI-4510', 'descricao' => 'Mancal bipartido', 'quantidade' => 2, 'unidade_id' => $un('PC'), 'prazo_entrega_item' => 45],
+                // Item 2 chegou em outra remessa: NF propria sobrescreve a do PI.
+                ['numero_item' => 2, 'cod_mmv' => 'MMV-MA-05', 'ni' => 'NI-4510', 'descricao' => 'Mancal bipartido', 'quantidade' => 2, 'unidade_id' => $un('PC'), 'nf_cliente' => 'NF-12088', 'prazo_entrega_item' => 45],
                 ['numero_item' => 3, 'cod_mmv' => 'MMV-TP-09', 'descricao' => 'Tampa lateral', 'quantidade' => 2, 'unidade_id' => $un('PC'), 'prazo_entrega_item' => 20],
             ],
             $admin->id
@@ -89,21 +100,25 @@ class DemoSeeder extends Seeder
         // PI 2 — alocado, em andamento (sem finalizar)
         $pi2 = $liberacaoSvc->criar(
             ['numero_pi' => 'PI-DEMO-1039', 'numero_pc' => 'PC-88240', 'cliente_id' => $clientes['CSN'] ?? null,
+             'unidade_id' => $unidadeDe('CSN', 'Volta Redonda'),
              'escopo_id' => $escopos['Recuperacao'] ?? null, 'data_pedido' => now()->subDays(3)->toDateString(),
-             'observacoes' => 'Recuperação de rolo de mesa.'],
+             'nf_cliente' => 'NF-30877', 'observacoes' => 'Recuperação de rolo de mesa.'],
             [
                 ['numero_item' => 1, 'cod_mmv' => 'MMV-RL-21', 'ni' => 'NI-9001', 'descricao' => 'Rolo de mesa recuperado', 'quantidade' => 6, 'unidade_id' => $un('PC'), 'prazo_entrega_item' => 25],
-                ['numero_item' => 2, 'cod_mmv' => 'MMV-EX-22', 'descricao' => 'Eixo do rolo', 'quantidade' => 6, 'unidade_id' => $un('PC'), 'prazo_entrega_item' => 25],
+                ['numero_item' => 2, 'cod_mmv' => 'MMV-EX-22', 'descricao' => 'Eixo do rolo', 'quantidade' => 6, 'unidade_id' => $un('PC'), 'nf_cliente' => 'NF-30912', 'prazo_entrega_item' => 25],
             ],
             $admin->id
         );
 
-        // PI 3 — recem-criado, ainda aguardando (nao alocado)
+        // PI 3 — recem-criado, ainda aguardando (nao alocado).
+        // Cliente com mais de uma unidade: mostra o rotulo "Suzano SA – Ribas do Rio Pardo".
         $liberacaoSvc->criar(
-            ['numero_pi' => 'PI-DEMO-1040', 'cliente_id' => $clientes['Gerdau'] ?? null, 'escopo_id' => $escopos['Fabricacao'] ?? null,
+            ['numero_pi' => 'PI-DEMO-1040', 'cliente_id' => $clientes['Suzano SA'] ?? null,
+             'unidade_id' => $unidadeDe('Suzano SA', 'Ribas do Rio Pardo'), 'escopo_id' => $escopos['Fabricacao'] ?? null,
              'data_pedido' => now()->subDay()->toDateString(), 'observacoes' => 'Aguardando alocação na engenharia.'],
             [
-                ['numero_item' => 1, 'cod_mmv' => 'MMV-GR-30', 'descricao' => 'Grelha fundida', 'quantidade' => 10, 'unidade_id' => $un('PC'), 'prazo_entrega_item' => 15],
+                // PI sem NF no cabecalho: a NF chega so no item.
+                ['numero_item' => 1, 'cod_mmv' => 'MMV-GR-30', 'descricao' => 'Grelha fundida', 'quantidade' => 10, 'unidade_id' => $un('PC'), 'nf_cliente' => 'NF-77120', 'prazo_entrega_item' => 15],
             ],
             $admin->id
         );

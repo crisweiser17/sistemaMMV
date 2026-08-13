@@ -4,12 +4,19 @@
 @section('content')
 <div x-data="Object.assign(
         liveResource({ url: '{{ route('engenharia.data') }}', channel: 'demandas', events: ['.demanda.atualizada'] }),
+        unidadesDoCliente(),
         {
-            filtros: { busca: '', cliente_id: '', status_id: '', tipo: '', responsavel_id: '' },
+            filtros: { busca: '', cliente_id: '', unidade_id: '', status_id: '', tipo: '', responsavel_id: '' },
             expandidas: {},
             get filtrando() { return Object.values(this.filtros).some(v => v !== '' && v !== null); },
             aplicar() { this.load(this.filtros); },
-            limpar() { this.filtros = { busca: '', cliente_id: '', status_id: '', tipo: '', responsavel_id: '' }; this.load(this.filtros); },
+            limpar() { this.filtros = { busca: '', cliente_id: '', unidade_id: '', status_id: '', tipo: '', responsavel_id: '' }; this.unidades = []; this.load(this.filtros); },
+            // Trocar de cliente zera a unidade e recarrega as opcoes daquele cliente.
+            async trocarCliente() {
+                this.filtros.unidade_id = '';
+                await this.carregarUnidades(this.filtros.cliente_id);
+                this.aplicar();
+            },
             toggle(id) { this.expandidas[id] = !this.expandidas[id]; },
             aberto(id) { return this.filtrando || !!this.expandidas[id]; }
         }
@@ -19,9 +26,16 @@
         <div class="flex flex-wrap items-end gap-3">
             <input x-model.debounce.400ms="filtros.busca" @input="aplicar()" placeholder="Buscar nº da cotação/PI ou item"
                    class="rounded-md border-gray-300 text-sm grow min-w-[220px]">
-            <select x-model="filtros.cliente_id" @change="aplicar()" class="rounded-md border-gray-300 text-sm">
+            <select x-model="filtros.cliente_id" @change="trocarCliente()" class="rounded-md border-gray-300 text-sm">
                 <option value="">Todos clientes</option>
                 @foreach ($clientes as $id => $nome)<option value="{{ $id }}">{{ $nome }}</option>@endforeach
+            </select>
+            {{-- O select de unidade reflete o cliente selecionado (lookup JSON). --}}
+            <select x-model="filtros.unidade_id" @change="aplicar()" :disabled="!unidades.length" class="rounded-md border-gray-300 text-sm">
+                <option value="">Todas unidades</option>
+                <template x-for="u in unidades" :key="u.id">
+                    <option :value="u.id" x-text="u.nome"></option>
+                </template>
             </select>
             <select x-model="filtros.status_id" @change="aplicar()" class="rounded-md border-gray-300 text-sm">
                 <option value="">Todos status</option>
@@ -51,7 +65,12 @@
                 <button type="button" @click="toggle(d.id)" class="flex items-center gap-3 text-left">
                     <span class="text-gray-400 text-xs w-3" x-text="aberto(d.id) ? '▼' : '▶'"></span>
                     <span>
-                        <span class="block text-base font-semibold text-gray-800" x-text="d.numero_referencia"></span>
+                        <span class="block text-base font-semibold text-gray-800">
+                            <span x-text="d.numero_referencia"></span>
+                            {{-- Processo que mudou depois do ultimo PDF do PI. --}}
+                            <span x-show="d.alterado" x-cloak
+                                  class="ml-1 inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-semibold bg-red-100 text-red-700 border border-red-300 align-middle">ALTERADO</span>
+                        </span>
                         <span class="block text-sm text-gray-500">
                             <span x-text="d.cliente ?? '—'"></span>
                             · <span class="capitalize" x-text="d.tipo"></span>
@@ -59,7 +78,11 @@
                         </span>
                     </span>
                 </button>
-                <a :href="d.detalhar_url" class="text-accent-700 hover:underline text-sm font-medium whitespace-nowrap">Detalhar →</a>
+                <div class="flex items-center gap-3 whitespace-nowrap">
+                    <a x-show="d.alterado" x-cloak :href="d.alteracoes_url"
+                       class="text-red-700 hover:underline text-sm font-medium">⚠ Ver alterações</a>
+                    <a :href="d.detalhar_url" class="text-accent-700 hover:underline text-sm font-medium">Detalhar →</a>
+                </div>
             </div>
 
             <div x-show="aberto(d.id)" x-cloak x-transition.origin.top class="mt-3 border-t pt-3 divide-y">

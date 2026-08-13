@@ -18,7 +18,12 @@ return Application::configure(basePath: dirname(__DIR__))
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
+        // Erro tem de voltar em JSON tambem para as chamadas fetch/XHR das telas
+        // (window.mmvFetch envia Accept: application/json), e nao so para "api/*".
+        // Sem o expectsJson() um upload invalido devolvia 302 + HTML: a mensagem real
+        // de validacao nunca chegava ao front e o usuario so via o texto generico.
+        // Formulario HTML normal (liberacao, cotacao) continua com redirect + withErrors.
         $exceptions->shouldRenderJsonWhen(
-            fn (Request $request) => $request->is('api/*'),
+            fn (Request $request) => $request->is('api/*') || $request->expectsJson(),
         );
     })->create();

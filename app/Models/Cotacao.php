@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\TemUnidadeDeCliente;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -11,12 +12,12 @@ use OwenIt\Auditing\Contracts\Auditable as AuditableContract;
 
 class Cotacao extends Model implements AuditableContract
 {
-    use Auditable, SoftDeletes;
+    use Auditable, SoftDeletes, TemUnidadeDeCliente;
 
     protected $table = 'cotacoes';
 
     protected $fillable = [
-        'numero', 'numero_cliente', 'cliente_id', 'escopo_id', 'data_cotacao',
+        'numero', 'numero_cliente', 'cliente_id', 'unidade_id', 'escopo_id', 'data_cotacao',
         'prazo_resposta', 'nf_cliente', 'observacoes', 'criado_por',
     ];
 
