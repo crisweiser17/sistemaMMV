@@ -49,6 +49,13 @@ class LoginController extends Controller
         if ($this->migracao->deveExecutar($request->user())) {
             $resultado = $this->migracao->executar();
             $destino->with($resultado['ok'] ? 'success' : 'error', $resultado['mensagem']);
+
+            // Qual banco o servidor usa e onde ficou o backup. Vai em chave
+            // separada para o toast poder mostrar como segunda linha, sem
+            // espremer tudo numa frase que some da tela em segundos.
+            if ($resultado['detalhe'] !== '') {
+                $destino->with('toast_detalhe', $resultado['detalhe']);
+            }
         }
 
         $this->registrarLog($request, 'login');

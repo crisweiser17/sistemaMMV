@@ -5,10 +5,12 @@ namespace Tests\Feature;
 use App\Models\Perfil;
 use App\Models\User;
 use App\Services\MigracaoAutomaticaService;
+use Illuminate\Database\SQLiteConnection;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+use PDO;
 use Tests\TestCase;
 
 /**
@@ -328,9 +330,18 @@ class MigracaoAutomaticaLoginTest extends TestCase
         $this->assertTrue(Schema::hasTable('teste_migracao_automatica'));
     }
 
-    // ---- Backup ------------------------------------------------------------
+    // ---- Backup e identificacao do banco -----------------------------------
 
-    public function test_executar_copia_o_banco_sqlite_para_a_pasta_de_backups(): void
+    /**
+     * Roda executar() contra um banco SQLite em arquivo (o :memory: da suite nao
+     * tem arquivo para copiar) e devolve o resultado junto dos backups criados.
+     *
+     * O nome da conexao e sempre proprio do teste: reaproveitar `sqlite` faria o
+     * purge derrubar a conexao em memoria que a suite inteira usa.
+     *
+     * @return array{resultado: array<string, mixed>, novos: list<string>}
+     */
+    private function executarContraArquivo(string $conexao, string $driver): array
     {
         $banco = storage_path('app/teste-migracao-banco.sqlite');
         @unlink($banco);
@@ -339,32 +350,115 @@ class MigracaoAutomaticaLoginTest extends TestCase
 
         $antes = glob(storage_path('app/backups/banco-*.sqlite')) ?: [];
 
-        config(['database.connections.teste_backup' => [
-            'driver' => 'sqlite',
+        config(["database.connections.{$conexao}" => [
+            'driver' => $driver,
             'database' => $banco,
             'prefix' => '',
             'foreign_key_constraints' => false,
         ]]);
 
         $original = DB::getDefaultConnection();
-        DB::setDefaultConnection('teste_backup');
+        DB::setDefaultConnection($conexao);
 
         try {
             $resultado = app(MigracaoAutomaticaService::class)->executar();
         } finally {
             DB::setDefaultConnection($original);
-            DB::purge('teste_backup');
+            DB::purge($conexao);
         }
 
-        $depois = glob(storage_path('app/backups/banco-*.sqlite')) ?: [];
-        $novos = array_values(array_diff($depois, $antes));
+        $novos = array_values(array_diff(glob(storage_path('app/backups/banco-*.sqlite')) ?: [], $antes));
 
         foreach ($novos as $arquivo) {
             $this->temporarios[] = $arquivo;
         }
 
+        return ['resultado' => $resultado, 'novos' => $novos];
+    }
+
+    public function test_executar_copia_o_banco_sqlite_para_a_pasta_de_backups(): void
+    {
+        ['resultado' => $resultado, 'novos' => $novos] = $this->executarContraArquivo('teste_backup', 'sqlite');
+
         $this->assertTrue($resultado['ok'], 'executar() deveria ter migrado o banco de arquivo');
         $this->assertCount(1, $novos, 'deveria existir exatamente um backup novo');
         $this->assertNotEmpty($resultado['aplicadas']);
+    }
+
+    public function test_mensagem_informa_sqlite_e_o_caminho_do_backup(): void
+    {
+        // O cliente nao tem o .env de producao: e por esta linha que ele descobre
+        // qual banco o servidor usa e onde o backup foi parar.
+        ['resultado' => $resultado, 'novos' => $novos] = $this->executarContraArquivo('teste_backup', 'sqlite');
+
+        $this->assertStringContainsString('SQLite', $resultado['detalhe']);
+        $this->assertStringContainsString('storage/app/backups/banco-', $resultado['detalhe']);
+        $this->assertStringContainsString(basename($novos[0]), $resultado['detalhe']);
+        $this->assertStringContainsString('migrations aplicadas', $resultado['mensagem']);
+
+        // O detalhe fica fora da mensagem curta, que precisa caber no toast.
+        $this->assertStringNotContainsString('backup', $resultado['mensagem']);
+    }
+
+    public function test_mensagem_informa_mysql_e_a_ausencia_de_backup_automatico(): void
+    {
+        // Conexao falsa: fala SQLite por baixo (para o migrate funcionar de
+        // verdade) mas se identifica como mysql, que e o que o servico consulta.
+        DB::extend('teste_backup_mysql', function (array $config, string $nome) {
+            // O ConnectionFactory normalmente injeta o nome da conexao no config.
+            // Sem ele o Migrator zera a conexao padrao no meio das migrations.
+            $config['name'] = $nome;
+
+            return new class(new PDO('sqlite:'.$config['database']), $config['database'], '', $config) extends SQLiteConnection
+            {
+                public function getDriverName(): string
+                {
+                    return 'mysql';
+                }
+            };
+        });
+
+        ['resultado' => $resultado, 'novos' => $novos] = $this->executarContraArquivo('teste_backup_mysql', 'mysql');
+
+        $this->assertTrue($resultado['ok'], $resultado['mensagem']);
+        $this->assertSame([], $novos, 'MySQL nao pode gerar copia de arquivo');
+        $this->assertStringContainsString('MySQL', $resultado['detalhe']);
+        $this->assertStringContainsString('sem backup automatico', $resultado['detalhe']);
+        $this->assertStringContainsString('painel da hospedagem', $resultado['detalhe']);
+        $this->assertStringNotContainsString('SQLite', $resultado['detalhe']);
+    }
+
+    public function test_mensagem_avisa_quando_o_backup_sqlite_falha(): void
+    {
+        // Pasta de backups intransitavel (um arquivo no lugar do diretorio): o
+        // operador PRECISA saber que migrou sem rede de seguranca.
+        $pasta = storage_path('app/backups');
+
+        foreach (glob($pasta.'/*') ?: [] as $sobra) {
+            @unlink($sobra);
+        }
+
+        @rmdir($pasta);
+        $this->assertFalse(is_dir($pasta), 'nao foi possivel liberar a pasta de backups para o teste');
+
+        touch($pasta);
+        $this->temporarios[] = $pasta;
+
+        ['resultado' => $resultado] = $this->executarContraArquivo('teste_backup', 'sqlite');
+
+        $this->assertTrue($resultado['ok'], 'a falha de backup nao pode impedir a migracao');
+        $this->assertStringContainsString('SQLite', $resultado['detalhe']);
+        $this->assertStringContainsString('FALHOU', $resultado['detalhe']);
+    }
+
+    public function test_detalhe_do_banco_chega_na_sessao_junto_do_login(): void
+    {
+        $this->administrador();
+        $this->migrationQueCria();
+
+        $resposta = $this->post('/login', ['email' => 'admin@mmv.test', 'password' => 'segredo123']);
+
+        $resposta->assertSessionHas('success');
+        $resposta->assertSessionHas('toast_detalhe', fn (string $d) => str_contains($d, 'SQLite'));
     }
 }
