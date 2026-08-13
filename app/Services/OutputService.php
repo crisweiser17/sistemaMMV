@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\Demanda;
 use App\Models\Output;
+use App\Support\MapaAlteracoes;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Support\Facades\Storage;
 
@@ -13,12 +14,24 @@ use Illuminate\Support\Facades\Storage;
  */
 class OutputService
 {
-    /** Estrutura de dados do PI consumida tanto pelo preview quanto pelo PDF. */
-    public function montarDados(Demanda $demanda): array
+    public function __construct(private AlteracaoService $alteracoes) {}
+
+    /**
+     * Estrutura de dados do PI consumida tanto pelo preview quanto pelo PDF.
+     *
+     * $destacarAlteracoes so e ligado pelo preview em tela. O PDF que esta sendo
+     * gerado passa a ser, por definicao, a versao vigente do processo: ele nao pode
+     * sair com marcacao de alteracao, senao a folha nasceria dizendo que ela mesma
+     * esta desatualizada.
+     */
+    public function montarDados(Demanda $demanda, bool $destacarAlteracoes = false): array
     {
         $demanda->load([
-            'headers.linhas.material', 'headers.linhas.unidade', 'headers.linhas.categoria',
-            'headers.status', 'headers.responsavel', 'headers.cliente',
+            // Categoria/tipo do material entram no rotulo "especificacao completa" impresso no PI.
+            'headers.linhas.material.tipo.categoria', 'headers.linhas.unidade', 'headers.linhas.categoria',
+            'headers.status', 'headers.responsavel', 'headers.cliente', 'headers.unidade',
+            // Item de origem: o PDF imprime a NF efetiva do item (propria ou herdada do PI).
+            'headers.itemLiberacao.liberacao', 'headers.itemCotacao',
         ]);
 
         $referencia = $demanda->referencia();
@@ -43,9 +56,13 @@ class OutputService
             'demanda' => $demanda,
             'referencia' => $referencia,
             'cliente' => $primeiro?->cliente ?? $referencia?->cliente,
+            // Rotulo "Cliente – Unidade" impresso no PDF/preview.
+            'clienteRotulo' => $primeiro?->cliente_com_unidade ?? $referencia?->cliente_com_unidade,
             'numeroReferencia' => $primeiro?->numero_referencia ?? ('Demanda #'.$demanda->id),
             'itens' => $itens,
             'gerado_em' => now(),
+            // Mapa vazio = nada destacado; e o que o PDF sempre recebe.
+            'alteracoes' => $destacarAlteracoes ? $this->alteracoes->mapa($demanda) : MapaAlteracoes::vazio(),
         ];
     }
 

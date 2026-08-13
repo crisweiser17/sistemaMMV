@@ -7,8 +7,10 @@
         @can('editar', 'liberacao')<x-button :href="route('liberacao.edit', $liberacao)" variant="secondary">Editar</x-button>@endcan
     </x-slot:actions>
     <div class="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-        <div><div class="text-gray-500">Cliente</div><div>{{ $liberacao->cliente?->nome ?? '—' }}</div></div>
+        <div><div class="text-gray-500">Cliente</div><div>{{ $liberacao->cliente_com_unidade ?? '—' }}</div></div>
         <div><div class="text-gray-500">PC</div><div>{{ $liberacao->numero_pc ?? '—' }}</div></div>
+        {{-- NF do PI: itens sem NF propria herdam esta. --}}
+        <div><div class="text-gray-500">NF Cliente</div><div>{{ $liberacao->nf_cliente ?? '—' }}</div></div>
         <div><div class="text-gray-500">Data Pedido</div><div>{{ optional($liberacao->data_pedido)->format('d/m/Y') ?? '—' }}</div></div>
         <div><div class="text-gray-500">Prazo (dias)</div><div>{{ $liberacao->prazo_entrega_dias ?? '—' }}</div></div>
     </div>
@@ -19,12 +21,20 @@
         <div class="border-b py-3">
             <div class="flex justify-between text-sm">
                 <div><b>#{{ $i->numero_item }}</b> · {{ $i->cod_mmv }} · {{ $i->descricao }}</div>
-                <div class="text-gray-500">{{ $i->quantidade }} {{ $i->unidade?->sigla }} · prazo {{ $i->prazo_entrega_item ?? '—' }}d</div>
+                {{-- nf_efetiva ja resolve "NF do item ?? NF do PI"; o rotulo so diz de onde veio. --}}
+                <div class="text-gray-500">
+                    NF {{ $i->nf_efetiva ?? '—' }}
+                    @if ($i->nf_diverge_do_pi)
+                        <span class="text-xs text-accent-700" title="NF própria do item — sobrescreve a NF do PI">(própria)</span>
+                    @endif
+                    · {{ $i->quantidade }} {{ $i->unidade?->sigla }} · prazo {{ $i->prazo_entrega_item ?? '—' }}d
+                </div>
             </div>
             @can('editar', 'liberacao')
                 <form method="POST" action="{{ route('liberacao.item.anexo', [$liberacao, $i]) }}" enctype="multipart/form-data" class="flex items-center gap-2 mt-2">
-                    @csrf<input type="file" name="arquivo" required class="text-xs">
+                    @csrf<input type="file" name="arquivo" required class="text-xs" accept="{{ \App\Services\AnexoService::accept() }}">
                     <button class="text-xs text-accent-700 hover:underline">Anexar ao item</button>
+                    <span class="text-xs text-gray-400">{{ \App\Services\AnexoService::extensoesLegiveis() }} · até {{ \App\Services\AnexoService::limiteMb() }} MB</span>
                 </form>
             @endcan
             @if ($i->anexos->count())
@@ -48,7 +58,8 @@
 <x-card title="Anexos gerais do PI">
     @can('editar', 'liberacao')
         <form method="POST" action="{{ route('liberacao.anexo', $liberacao) }}" enctype="multipart/form-data" class="flex items-end gap-3 mb-4">
-            @csrf<input type="file" name="arquivo" required class="text-sm">
+            @csrf<input type="file" name="arquivo" required class="text-sm" accept="{{ \App\Services\AnexoService::accept() }}">
+            <span class="text-xs text-gray-400">{{ \App\Services\AnexoService::extensoesLegiveis() }} · até {{ \App\Services\AnexoService::limiteMb() }} MB</span>
             <x-button type="submit" variant="secondary">Enviar anexo</x-button>
         </form>
     @endcan

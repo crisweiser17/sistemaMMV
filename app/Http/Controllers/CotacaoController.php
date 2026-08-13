@@ -7,11 +7,12 @@ use App\Models\Cotacao;
 use App\Models\CotacaoAnexo;
 use App\Models\Escopo;
 use App\Models\UnidadeMedida;
+use App\Services\AnexoService;
+use App\Services\ClienteUnidadeService;
 use App\Services\CotacaoService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Storage;
 use Illuminate\View\View;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
@@ -22,8 +23,9 @@ class CotacaoController extends Controller
     public function index(Request $request): View
     {
         $cotacoes = Cotacao::query()
-            ->with(['cliente', 'escopo'])
+            ->with(['cliente', 'unidade', 'escopo'])
             ->when($request->filled('cliente_id'), fn ($q) => $q->where('cliente_id', $request->integer('cliente_id')))
+            ->when($request->filled('unidade_id'), fn ($q) => $q->where('unidade_id', $request->integer('unidade_id')))
             ->when($request->filled('busca'), fn ($q) => $q->where('numero', 'like', '%'.$request->string('busca').'%'))
             ->latest()->paginate(15)->withQueryString();
 
@@ -52,7 +54,7 @@ class CotacaoController extends Controller
 
     public function show(Cotacao $cotacao): View
     {
-        $cotacao->load(['cliente', 'escopo', 'itens.unidade', 'anexos', 'autor']);
+        $cotacao->load(['cliente', 'unidade', 'escopo', 'itens.unidade', 'anexos', 'autor']);
 
         return view('cotacao.show', compact('cotacao'));
     }
@@ -86,7 +88,7 @@ class CotacaoController extends Controller
     public function anexo(Request $request, Cotacao $cotacao): RedirectResponse
     {
         $this->authorize('editar', 'cotacao');
-        $request->validate(['arquivo' => 'required|file|max:20480']);
+        $request->validate(AnexoService::regras(), AnexoService::mensagens());
 
         $this->service->adicionarAnexo($cotacao, $request->file('arquivo'), $request->user()->id);
 
@@ -98,9 +100,9 @@ class CotacaoController extends Controller
     {
         $this->authorize('ver', 'cotacao');
         abort_unless($anexo->cotacao_id === $cotacao->id, 404);
-        abort_unless(Storage::exists($anexo->path), 404);
+        abort_unless(AnexoService::disco()->exists($anexo->path), 404);
 
-        return Storage::response($anexo->path, $anexo->nome_arquivo);
+        return AnexoService::disco()->response($anexo->path, $anexo->nome_arquivo);
     }
 
     public function removeAnexo(Cotacao $cotacao, CotacaoAnexo $anexo): RedirectResponse
@@ -130,14 +132,27 @@ class CotacaoController extends Controller
             'numero' => 'nullable|string|max:100',
             'numero_cliente' => 'nullable|string|max:100',
             'cliente_id' => 'nullable|exists:clientes,id',
+            'unidade_id' => ClienteUnidadeService::regraDeValidacao($request->integer('cliente_id')),
             'escopo_id' => 'nullable|exists:escopos,id',
             'data_cotacao' => 'nullable|date',
             'prazo_resposta' => 'nullable|date',
             'nf_cliente' => 'nullable|string|max:100',
             'observacoes' => 'nullable|string',
             'itens' => 'array',
+            // ATENCAO: validate() devolve SO as chaves com regra declarada. Todo campo de
+            // item que o service grava precisa aparecer aqui, senao e descartado em silencio.
+            // O 'id' e o mais critico: sem ele a sincronizacao recria o item em vez de
+            // atualizar, perdendo anexos e historico de auditoria.
+            'itens.*.id' => 'nullable|integer',
+            'itens.*.numero_item' => 'nullable|integer|min:1',
+            'itens.*.cod_mmv' => 'nullable|string|max:255',
+            'itens.*.ni' => 'nullable|string|max:255',
             'itens.*.descricao' => 'nullable|string',
             'itens.*.quantidade' => 'nullable|numeric|min:0',
+            'itens.*.unidade_id' => 'nullable|exists:unidades_medida,id',
+            'itens.*.material_cliente' => 'nullable|string|max:255',
+            'itens.*.descricao_cliente' => 'nullable|string',
+            'itens.*.observacoes' => 'nullable|string',
         ]);
 
         $itens = $validated['itens'] ?? [];

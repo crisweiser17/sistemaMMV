@@ -9,8 +9,21 @@
         @endcan
     </x-slot:actions>
 
-    <form method="GET" class="flex flex-wrap gap-3 mb-4">
-        <x-select name="cliente_id" :options="$clientes->toArray()" :value="request('cliente_id')" placeholder="Todos os clientes" class="w-56" />
+    {{-- O select de unidade acompanha o cliente escolhido (lookup JSON). --}}
+    <form method="GET" class="flex flex-wrap gap-3 mb-4"
+          x-data="Object.assign(unidadesDoCliente(), {
+              unidadeAtual: @js(request('unidade_id')),
+              init() { return this.carregarUnidades(@js(request('cliente_id'))); }
+          })">
+        <x-select name="cliente_id" :options="$clientes->toArray()" :value="request('cliente_id')" placeholder="Todos os clientes" class="w-56"
+                  @change="unidadeAtual = ''; carregarUnidades($event.target.value)" />
+        <select name="unidade_id" class="w-56 rounded-md border-gray-300 shadow-sm focus:border-accent-500 focus:ring-accent-500 text-sm"
+                :disabled="!unidades.length">
+            <option value="">Todas as unidades</option>
+            <template x-for="u in unidades" :key="u.id">
+                <option :value="u.id" :selected="String(u.id) === String(unidadeAtual)" x-text="u.nome"></option>
+            </template>
+        </select>
         <x-input name="busca" placeholder="Buscar nº cotação" :value="request('busca')" class="w-56" />
         <x-button type="submit" variant="secondary">Filtrar</x-button>
     </form>
@@ -26,7 +39,7 @@
                 @forelse ($cotacoes as $c)
                     <tr class="hover:bg-gray-50">
                         <td class="py-2 pr-4 font-medium">{{ $c->numero ?? '#'.$c->id }}</td>
-                        <td class="py-2 pr-4">{{ $c->cliente?->nome ?? '—' }}</td>
+                        <td class="py-2 pr-4">{{ $c->cliente_com_unidade ?? '—' }}</td>
                         <td class="py-2 pr-4">{{ $c->escopo?->descricao ?? '—' }}</td>
                         <td class="py-2 pr-4">{{ optional($c->data_cotacao)->format('d/m/Y') ?? '—' }}</td>
                         <td class="py-2 pr-4">{{ $c->itens()->count() }}</td>

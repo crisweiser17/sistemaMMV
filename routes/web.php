@@ -78,6 +78,9 @@ Route::middleware(['auth', 'ativo'])->group(function () {
         Route::get('/{header}/linha/{linha}/arquivo', [EngenhariaController::class, 'verArquivo'])->name('linha.arquivo.ver');
         Route::delete('/{header}/linha/{linha}/arquivo', [EngenhariaController::class, 'removerArquivo'])->name('linha.arquivo.remove');
         Route::post('/{header}/linha/{linha}/dependencia', [EngenhariaController::class, 'addDep'])->name('dependencia');
+        // Copia da estrutura de um item ja concluido para este item
+        Route::get('/{header}/estruturas', [EngenhariaController::class, 'estruturas'])->name('estruturas');
+        Route::post('/{header}/copiar-estrutura', [EngenhariaController::class, 'copiarEstrutura'])->name('estrutura.copiar');
         Route::put('/{header}/finalizar', [EngenhariaController::class, 'finalizar'])->name('finalizar');
     });
 
@@ -87,6 +90,9 @@ Route::middleware(['auth', 'ativo'])->group(function () {
         Route::post('/{demanda}/gerar', [OutputController::class, 'gerar'])->name('gerar');
         Route::get('/{demanda}/download', [OutputController::class, 'download'])->name('download');
         Route::get('/{demanda}/historico', [OutputController::class, 'historico'])->name('historico');
+        // Historico das mudancas feitas depois do ultimo PDF (tela propria: a lista
+        // e cronologica e por campo, nao cabe junto da lista de versoes do PDF).
+        Route::get('/{demanda}/alteracoes', [OutputController::class, 'alteracoes'])->name('alteracoes');
     });
 
     // Admin: hub + lookups JSON + CRUD generico por recurso
@@ -96,8 +102,12 @@ Route::middleware(['auth', 'ativo'])->group(function () {
         // Lookups JSON (dropdowns encadeados)
         Route::get('/categorias', [LookupController::class, 'categorias'])->name('categorias');
         Route::get('/tipos', [LookupController::class, 'tipos'])->name('tipos');
-        Route::get('/materiais', [LookupController::class, 'materiais'])->name('materiais');
         Route::get('/processos', [LookupController::class, 'processos'])->name('processos');
+        // Prefixo /lookup para nao colidir com a rota de CRUD do recurso homonimo.
+        // 'materiais' e 'unidades' sao slugs do ResourceRegistry: sem o prefixo, o CRUD
+        // (registrado depois) sobrescreve o lookup e o dropdown recebe HTML no lugar do JSON.
+        Route::get('/lookup/materiais', [LookupController::class, 'materiais'])->name('lookup.materiais');
+        Route::get('/lookup/unidades', [LookupController::class, 'unidadesDoCliente'])->name('lookup.unidades');
 
         // CRUD generico — um conjunto de rotas nomeadas por recurso do registry
         foreach (ResourceRegistry::slugs() as $slug) {

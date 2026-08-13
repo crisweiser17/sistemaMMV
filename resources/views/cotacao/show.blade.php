@@ -7,7 +7,7 @@
         @can('editar', 'cotacao')<x-button :href="route('cotacao.edit', $cotacao)" variant="secondary">Editar</x-button>@endcan
     </x-slot:actions>
     <div class="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-        <div><div class="text-gray-500">Cliente</div><div>{{ $cotacao->cliente?->nome ?? '—' }}</div></div>
+        <div><div class="text-gray-500">Cliente</div><div>{{ $cotacao->cliente_com_unidade ?? '—' }}</div></div>
         <div><div class="text-gray-500">Escopo</div><div>{{ $cotacao->escopo?->descricao ?? '—' }}</div></div>
         <div><div class="text-gray-500">Data</div><div>{{ optional($cotacao->data_cotacao)->format('d/m/Y') ?? '—' }}</div></div>
         <div><div class="text-gray-500">NF Cliente</div><div>{{ $cotacao->nf_cliente ?? '—' }}</div></div>
@@ -35,8 +35,9 @@
     @can('editar', 'cotacao')
         <form method="POST" action="{{ route('cotacao.anexo', $cotacao) }}" enctype="multipart/form-data" class="flex items-end gap-3 mb-4">
             @csrf
-            <input type="file" name="arquivo" required class="text-sm">
+            <input type="file" name="arquivo" required class="text-sm" accept="{{ \App\Services\AnexoService::accept() }}">
             <x-button type="submit" variant="secondary">Enviar anexo</x-button>
+            <span class="text-xs text-gray-400">{{ \App\Services\AnexoService::extensoesLegiveis() }} · até {{ \App\Services\AnexoService::limiteMb() }} MB</span>
         </form>
     @endcan
     <ul class="text-sm divide-y">

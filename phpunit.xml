@@ -19,6 +19,9 @@
     </source>
     <php>
         <env name="APP_ENV" value="testing"/>
+        <!-- A suite roda em console; sem isto o pacote de auditoria nao grava nada e
+             a deteccao de alteracao pos-liberacao ficaria sem fonte de dados. -->
+        <env name="AUDIT_CONSOLE" value="true"/>
         <env name="APP_MAINTENANCE_DRIVER" value="file"/>
         <env name="BCRYPT_ROUNDS" value="4"/>
         <env name="BROADCAST_CONNECTION" value="null"/>

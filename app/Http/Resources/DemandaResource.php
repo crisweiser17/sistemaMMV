@@ -12,12 +12,26 @@ use Illuminate\Http\Resources\Json\JsonResource;
  */
 class DemandaResource extends JsonResource
 {
+    /**
+     * @param  mixed  $resource
+     * @param  bool  $alterado  processo mudou depois do ultimo PDF do PI. Vem pronto do
+     *                          AlteracaoService::marcadas() porque a deteccao e feita em
+     *                          lote para a listagem inteira, nao demanda a demanda.
+     */
+    public function __construct($resource, private readonly bool $alterado = false)
+    {
+        parent::__construct($resource);
+    }
+
     public function toArray(Request $request): array
     {
         $ref = $this->referencia();
 
         return [
             'id' => $this->id,
+            // Marcador "ALTERADO" da listagem + atalho para o historico da mudanca.
+            'alterado' => $this->alterado,
+            'alteracoes_url' => route('output.alteracoes', $this->resource),
             'tipo' => $this->tipo,
             'data_entrada' => optional($this->data_entrada)->format('d/m/Y'),
             'numero_referencia' => $ref?->numero_pi ?? $ref?->numero ?? ('#'.$this->referencia_id),
@@ -26,7 +40,11 @@ class DemandaResource extends JsonResource
             'prazo_cotacao' => $this->prazoCotacaoDias($ref),
             // Prazo de fabricacao: maior duracao de Gantt entre os itens (apos alocacao).
             'prazo_fabricacao' => app(GanttService::class)->prazoFabricacaoDemanda($this->resource),
-            'cliente' => $ref?->cliente?->nome,
+            // Rotulo unico "Cliente – Unidade" (acessor do PI/cotacao); os ids acompanham
+            // para os filtros de cliente/unidade da tela.
+            'cliente' => $ref?->cliente_com_unidade,
+            'cliente_id' => $ref?->cliente_id,
+            'unidade_id' => $ref?->unidade_id,
             'escopo' => $ref?->escopo?->descricao,
             'responsavel' => $this->responsavel?->name,
             'responsavel_id' => $this->responsavel_id,

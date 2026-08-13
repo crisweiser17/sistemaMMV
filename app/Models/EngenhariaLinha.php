@@ -6,10 +6,17 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use OwenIt\Auditing\Auditable;
+use OwenIt\Auditing\Contracts\Auditable as AuditableContract;
 
-class EngenhariaLinha extends Model
+/**
+ * Auditable: a linha e o registro que mais muda depois do processo liberado
+ * (ex.: quantidade de chapa de 3 para 4). O AlteracaoService le esse historico
+ * da tabela `audits` para marcar e explicar a alteracao pos-PDF.
+ */
+class EngenhariaLinha extends Model implements AuditableContract
 {
-    use SoftDeletes;
+    use Auditable, SoftDeletes;
 
     protected $table = 'engenharia_linhas';
 

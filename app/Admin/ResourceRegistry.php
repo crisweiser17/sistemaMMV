@@ -4,6 +4,7 @@ namespace App\Admin;
 
 use App\Models\CategoriaComponente;
 use App\Models\Cliente;
+use App\Models\ClienteUnidade;
 use App\Models\ComponenteComercial;
 use App\Models\Escopo;
 use App\Models\Material;
@@ -29,7 +30,17 @@ class ResourceRegistry
                 'fields' => [
                     ['name' => 'nome', 'label' => 'Nome', 'type' => 'text', 'rules' => 'required|string|max:255', 'list' => true],
                     ['name' => 'codigo_pa', 'label' => 'Código PA', 'type' => 'text', 'rules' => 'nullable|string|max:50', 'list' => true],
-                    ['name' => 'unidade', 'label' => 'Unidade', 'type' => 'text', 'rules' => 'nullable|string|max:100', 'list' => true],
+                    ['name' => 'ativo', 'label' => 'Ativo', 'type' => 'boolean', 'rules' => 'boolean', 'list' => true],
+                ],
+            ],
+            // Unidades (plantas) do cliente — substitui a antiga coluna clientes.unidade.
+            'unidades-cliente' => [
+                'label' => 'Unidades de Cliente', 'singular' => 'Unidade', 'model' => ClienteUnidade::class,
+                'fields' => [
+                    ['name' => 'cliente_id', 'label' => 'Cliente', 'type' => 'select', 'rules' => 'required|exists:clientes,id', 'list' => true,
+                        'optionsFrom' => [Cliente::class, 'nome'], 'display' => 'cliente.nome'],
+                    ['name' => 'nome', 'label' => 'Nome', 'type' => 'text', 'rules' => 'required|string|max:255', 'list' => true],
+                    ['name' => 'codigo', 'label' => 'Código', 'type' => 'text', 'rules' => 'nullable|string|max:50', 'list' => true],
                     ['name' => 'ativo', 'label' => 'Ativo', 'type' => 'boolean', 'rules' => 'boolean', 'list' => true],
                 ],
             ],
@@ -73,6 +84,8 @@ class ResourceRegistry
                     ['name' => 'tipo_id', 'label' => 'Tipo', 'type' => 'select', 'rules' => 'required|exists:tipos_componente,id', 'list' => true,
                         'optionsFrom' => [TipoComponente::class, 'nome'], 'display' => 'tipo.nome'],
                     ['name' => 'descricao', 'label' => 'Descrição', 'type' => 'text', 'rules' => 'required|string|max:255', 'list' => true],
+                    // Texto livre: cada tipo mede o que importa (chapa: esp. x larg. x compr.; barra: Ø x compr.).
+                    ['name' => 'dimensoes', 'label' => 'Dimensões', 'type' => 'text', 'rules' => 'nullable|string|max:255', 'list' => true],
                     ['name' => 'norma', 'label' => 'Norma', 'type' => 'text', 'rules' => 'nullable|string|max:255', 'list' => true],
                     ['name' => 'ativo', 'label' => 'Ativo', 'type' => 'boolean', 'rules' => 'boolean', 'list' => true],
                 ],

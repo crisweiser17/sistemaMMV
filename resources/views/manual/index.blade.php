@@ -86,8 +86,8 @@
         <x-card id="cotacao" title="4. Cotações">
             <p class="text-sm text-gray-700 mb-2"><b>Onde:</b> menu → Cotações.</p>
             <ul class="text-sm text-gray-700 list-disc list-inside space-y-1">
-                <li><b>Listagem:</b> mostra todas as cotações. Filtre por cliente ou busque pelo número.</li>
-                <li><b>Nova Cotação:</b> preencha os dados do cabeçalho (cliente, escopo, datas, observações).</li>
+                <li><b>Listagem:</b> mostra todas as cotações. Filtre por cliente e unidade, ou busque pelo número.</li>
+                <li><b>Nova Cotação:</b> preencha os dados do cabeçalho (cliente, unidade do cliente, escopo, datas, observações).</li>
                 <li><b>Itens:</b> clique em <b>+ Adicionar Item</b> para incluir linhas. Cada item tem código MMV, NI, descrição, quantidade, unidade e material do cliente. Use o <b>×</b> para remover.</li>
                 <li><b>Busca por NI:</b> ao sair do campo <b>NI</b> de um item, abre um modal com o histórico daquela peça em cotações/liberações anteriores.</li>
                 <li><b>Anexos:</b> na tela de visualização (Ver), envie arquivos (PDF, e-mail, imagens).</li>
@@ -98,7 +98,7 @@
         <x-card id="liberacao" title="5. Liberações (PI)">
             <p class="text-sm text-gray-700 mb-2"><b>Onde:</b> menu → Liberações (PI).</p>
             <ul class="text-sm text-gray-700 list-disc list-inside space-y-1">
-                <li><b>Novo PI:</b> informe número do PI/PC, cliente, escopo e datas.</li>
+                <li><b>Novo PI:</b> informe número do PI/PC, cliente, unidade do cliente, escopo e datas.</li>
                 <li><b>Itens:</b> além dos campos do item, cada um tem o <b>prazo de entrega (dias)</b>.</li>
                 <li><b>Prazo do cabeçalho:</b> é calculado <b>automaticamente</b> como o maior prazo entre todos os itens.</li>
                 <li><b>Anexos:</b> na tela de visualização há anexo <b>geral do PI</b> e anexo <b>por item</b> (ex.: desenho técnico do cliente).</li>
@@ -148,7 +148,8 @@
         <x-card id="admin" title="9. Cadastros (Admin)">
             <p class="text-sm text-gray-700 mb-2"><b>Onde:</b> menu → Cadastros (Admin). Disponível para Admin (editar) e Engenharia (ver).</p>
             <ul class="text-sm text-gray-700 list-disc list-inside space-y-1">
-                <li>Telas simples de cadastro para as tabelas de apoio: <b>Clientes, Escopos, Unidades, Categorias/Tipos/Materiais, Componentes comerciais, Processos, Status de engenharia e Perfis</b>.</li>
+                <li>Telas simples de cadastro para as tabelas de apoio: <b>Clientes, Unidades de Cliente, Escopos, Unidades (de medida), Categorias/Tipos/Materiais, Componentes comerciais, Processos, Status de engenharia e Perfis</b>.</li>
+                <li><b>Unidades de Cliente</b> são as plantas de cada cliente (ex.: Suzano SA → Três Lagoas e Ribas do Rio Pardo). Ao escolher o cliente na Cotação/PI, o campo <b>Unidade</b> lista só as unidades daquele cliente, e as telas passam a mostrar <b>“Cliente – Unidade”</b>.</li>
                 <li>Todas seguem o mesmo padrão: lista com <b>+ Novo</b>, e em cada linha <b>Editar</b> e <b>Excluir</b>.</li>
                 <li>A hierarquia <b>Categoria → Tipo → Material</b> é o que alimenta os dropdowns encadeados da Engenharia. Mantê-la correta deixa o detalhamento mais rápido.</li>
                 <li><b>Status de engenharia</b> tem uma cor — ela aparece como etiqueta colorida nas telas.</li>

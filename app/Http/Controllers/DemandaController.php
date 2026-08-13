@@ -3,9 +3,11 @@
 namespace App\Http\Controllers;
 
 use App\Http\Resources\DemandaResource;
+use App\Models\Cliente;
 use App\Models\Demanda;
 use App\Models\StatusEngenharia;
 use App\Models\User;
+use App\Services\AlteracaoService;
 use App\Services\DemandaService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -13,13 +15,17 @@ use Illuminate\View\View;
 
 class DemandaController extends Controller
 {
-    public function __construct(private DemandaService $service) {}
+    public function __construct(
+        private DemandaService $service,
+        private AlteracaoService $alteracoes,
+    ) {}
 
     public function index(): View
     {
         return view('demandas.index', [
             'responsaveis' => User::where('ativo', true)->orderBy('name')->pluck('name', 'id'),
             'statuses' => StatusEngenharia::orderBy('ordem')->get(),
+            'clientes' => Cliente::orderBy('nome')->pluck('nome', 'id'),
         ]);
     }
 
@@ -34,15 +40,29 @@ class DemandaController extends Controller
             ->latest('data_entrada')
             ->get();
 
-        // Filtro por numero do PI/cotacao (referencia) feito apos resolver a referencia.
+        // Filtros que dependem da referencia (PI/cotacao) sao aplicados depois de resolve-la:
+        // numero, cliente e unidade do cliente vivem no PI/cotacao, nao na demanda.
         $busca = trim((string) $request->string('busca'));
+        $clienteId = $request->integer('cliente_id');
+        $unidadeId = $request->integer('unidade_id');
 
-        $colecao = DemandaResource::collection($demandas)->resolve();
+        // Marcacao "ALTERADO" resolvida em lote para a lista inteira (ver AlteracaoService).
+        $marcadas = $this->alteracoes->marcadas($demandas);
+        $colecao = $demandas
+            ->map(fn (Demanda $d) => (new DemandaResource($d, $marcadas[$d->id] ?? false))->resolve())
+            ->all();
+
         if ($busca !== '') {
-            $colecao = array_values(array_filter($colecao, fn ($d) => str_contains(mb_strtolower($d['numero_referencia']), mb_strtolower($busca))));
+            $colecao = array_filter($colecao, fn ($d) => str_contains(mb_strtolower($d['numero_referencia']), mb_strtolower($busca)));
+        }
+        if ($clienteId) {
+            $colecao = array_filter($colecao, fn ($d) => $d['cliente_id'] === $clienteId);
+        }
+        if ($unidadeId) {
+            $colecao = array_filter($colecao, fn ($d) => $d['unidade_id'] === $unidadeId);
         }
 
-        return response()->json(['data' => $colecao]);
+        return response()->json(['data' => array_values($colecao)]);
     }
 
     public function alocar(Request $request, Demanda $demanda): JsonResponse

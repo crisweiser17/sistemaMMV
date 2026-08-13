@@ -5,8 +5,6 @@ namespace App\Services;
 use App\Models\Cotacao;
 use App\Models\Liberacao;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Storage;
-use Illuminate\Support\Str;
 
 /**
  * Motor de Cotacao: persistencia de cabecalho + itens + anexos, busca por NI
@@ -14,7 +12,10 @@ use Illuminate\Support\Str;
  */
 class CotacaoService
 {
-    public function __construct(private DemandaService $demandas) {}
+    public function __construct(
+        private DemandaService $demandas,
+        private AnexoService $anexos,
+    ) {}
 
     public function criar(array $dados, array $itens, int $userId): Cotacao
     {
@@ -71,8 +72,7 @@ class CotacaoService
 
     public function adicionarAnexo(Cotacao $cotacao, \Illuminate\Http\UploadedFile $arquivo, int $userId): void
     {
-        $hash = Str::uuid()->toString();
-        $path = $arquivo->storeAs("cotacoes/{$cotacao->id}", $hash.'_'.$arquivo->getClientOriginalName());
+        $path = $this->anexos->guardar($arquivo, "cotacoes/{$cotacao->id}");
 
         $cotacao->anexos()->create([
             'nome_arquivo' => $arquivo->getClientOriginalName(),
@@ -85,7 +85,7 @@ class CotacaoService
 
     public function removerAnexo(\App\Models\CotacaoAnexo $anexo): void
     {
-        Storage::delete($anexo->path);
+        $this->anexos->apagar($anexo->path);
         $anexo->delete();
     }
 
@@ -96,23 +96,23 @@ class CotacaoService
     public function historicoPorNi(string $ni): array
     {
         $cotacoes = Cotacao::whereHas('itens', fn ($q) => $q->where('ni', $ni))
-            ->with(['cliente', 'itens' => fn ($q) => $q->where('ni', $ni)])
+            ->with(['cliente', 'unidade', 'itens' => fn ($q) => $q->where('ni', $ni)])
             ->latest()->limit(20)->get()
             ->map(fn ($c) => [
                 'origem' => 'Cotação',
                 'numero' => $c->numero ?? ('#'.$c->id),
-                'cliente' => $c->cliente?->nome,
+                'cliente' => $c->cliente_com_unidade,
                 'data' => optional($c->data_cotacao)->format('d/m/Y'),
                 'itens' => $c->itens->map(fn ($i) => ['descricao' => $i->descricao, 'quantidade' => $i->quantidade])->all(),
             ]);
 
         $liberacoes = Liberacao::whereHas('itens', fn ($q) => $q->where('ni', $ni))
-            ->with(['cliente', 'itens' => fn ($q) => $q->where('ni', $ni)])
+            ->with(['cliente', 'unidade', 'itens' => fn ($q) => $q->where('ni', $ni)])
             ->latest()->limit(20)->get()
             ->map(fn ($l) => [
                 'origem' => 'Liberação',
                 'numero' => $l->numero_pi ?? ('#'.$l->id),
-                'cliente' => $l->cliente?->nome,
+                'cliente' => $l->cliente_com_unidade,
                 'data' => optional($l->data_pedido)->format('d/m/Y'),
                 'itens' => $l->itens->map(fn ($i) => ['descricao' => $i->descricao, 'quantidade' => $i->quantidade])->all(),
             ]);

@@ -2,10 +2,11 @@
 
 namespace App\Services;
 
+use App\Models\Demanda;
 use App\Models\Liberacao;
+use App\Models\LiberacaoItem;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Storage;
-use Illuminate\Support\Str;
 
 /**
  * Motor de Liberacao (PI): cabecalho + itens (com anexo por item) + anexos gerais,
@@ -13,7 +14,11 @@ use Illuminate\Support\Str;
  */
 class LiberacaoService
 {
-    public function __construct(private DemandaService $demandas) {}
+    public function __construct(
+        private DemandaService $demandas,
+        private AnexoService $anexos,
+        private AlteracaoService $alteracoes,
+    ) {}
 
     public function criar(array $dados, array $itens, int $userId): Liberacao
     {
@@ -37,8 +42,32 @@ class LiberacaoService
             $liberacao->update($dados);
             $this->sincronizarItens($liberacao, $itens);
 
+            // Editar o PI depois do processo liberado (NF, quantidade do item) muda
+            // a folha que producao e compras ja receberam.
+            $this->alteracoes->avisar($this->demandaDoPi($liberacao));
+
             return $liberacao->fresh('itens');
         });
+    }
+
+    /** Demanda gerada a partir deste PI (a que carrega o detalhamento e os PDFs). */
+    private function demandaDoPi(Liberacao $liberacao): ?Demanda
+    {
+        return Demanda::where('tipo', 'liberacao')->where('referencia_id', $liberacao->id)->first();
+    }
+
+    /**
+     * Busca livre da listagem: casa com o numero do PI e tambem com a NF — a do
+     * cabecalho ou a de qualquer item (itens de recuperacao chegam com NF propria).
+     */
+    public function aplicarBusca(Builder $consulta, string $termo): Builder
+    {
+        $curinga = '%'.$termo.'%';
+
+        return $consulta->where(fn (Builder $q) => $q
+            ->where('numero_pi', 'like', $curinga)
+            ->orWhere('nf_cliente', 'like', $curinga)
+            ->orWhereHas('itens', fn (Builder $i) => $i->where('nf_cliente', 'like', $curinga)));
     }
 
     /** prazo_entrega_dias = maior prazo_entrega_item entre os itens (regra do escopo). */
@@ -61,6 +90,7 @@ class LiberacaoService
                 'quantidade' => $item['quantidade'] ?? 0,
                 'unidade_id' => $item['unidade_id'] ?? null,
                 'material_cliente' => $item['material_cliente'] ?? null,
+                'nf_cliente' => $item['nf_cliente'] ?? null,
                 'prazo_entrega_item' => $item['prazo_entrega_item'] ?? null,
                 'descricao_cliente' => $item['descricao_cliente'] ?? null,
                 'observacoes' => $item['observacoes'] ?? null,
@@ -75,13 +105,15 @@ class LiberacaoService
                 $manter[] = $registro->id;
             }
         }
-        $liberacao->itens()->whereNotIn('id', $manter)->delete();
+        // Exclusao registro a registro (e nao pelo query builder): so assim o evento
+        // do Eloquent dispara e a auditoria guarda que o item saiu do PI.
+        $liberacao->itens()->whereNotIn('id', $manter)->get()
+            ->each(fn (LiberacaoItem $item) => $item->delete());
     }
 
     public function adicionarAnexoItem(\App\Models\LiberacaoItem $item, \Illuminate\Http\UploadedFile $arquivo): void
     {
-        $hash = Str::uuid()->toString();
-        $path = $arquivo->storeAs("liberacoes/{$item->liberacao_id}/itens/{$item->id}", $hash.'_'.$arquivo->getClientOriginalName());
+        $path = $this->anexos->guardar($arquivo, "liberacoes/{$item->liberacao_id}/itens/{$item->id}");
 
         $item->anexos()->create([
             'nome_arquivo' => $arquivo->getClientOriginalName(),
@@ -93,8 +125,7 @@ class LiberacaoService
 
     public function adicionarAnexoGeral(Liberacao $liberacao, \Illuminate\Http\UploadedFile $arquivo): void
     {
-        $hash = Str::uuid()->toString();
-        $path = $arquivo->storeAs("liberacoes/{$liberacao->id}", $hash.'_'.$arquivo->getClientOriginalName());
+        $path = $this->anexos->guardar($arquivo, "liberacoes/{$liberacao->id}");
 
         $liberacao->anexos()->create([
             'nome_arquivo' => $arquivo->getClientOriginalName(),
@@ -106,13 +137,13 @@ class LiberacaoService
 
     public function removerAnexo(\App\Models\LiberacaoAnexo $anexo): void
     {
-        Storage::delete($anexo->path);
+        $this->anexos->apagar($anexo->path);
         $anexo->delete();
     }
 
     public function removerAnexoItem(\App\Models\LiberacaoItemAnexo $anexo): void
     {
-        Storage::delete($anexo->path);
+        $this->anexos->apagar($anexo->path);
         $anexo->delete();
     }
 }

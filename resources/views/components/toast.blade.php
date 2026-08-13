@@ -1,4 +1,6 @@
-{{-- Toast global. Disparado por window.mmvToast(msg, type) ou pela flash session. --}}
+{{-- Toast global. Disparado por window.mmvToast(msg, type), pela flash session
+     ou pelos erros de validacao (formularios que redirecionam com withErrors).
+     Sem o bloco de $errors os formularios multipart falhavam em silencio. --}}
 <div
     x-data="{
         shown: false, message: '', type: 'success',
@@ -10,6 +12,7 @@
     x-init="
         @if (session('success')) show(@js(session('success')), 'success'); @endif
         @if (session('error')) show(@js(session('error')), 'error'); @endif
+        @if ($errors->any()) show(@js($errors->first()), 'error'); @endif
         window.addEventListener('mmv-toast', e => show(e.detail.message, e.detail.type));
     "
     x-show="shown" x-transition

@@ -7,6 +7,7 @@ use App\Models\CategoriaComponente;
 use App\Models\Material;
 use App\Models\ProcessoFabricacao;
 use App\Models\TipoComponente;
+use App\Services\ClienteUnidadeService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -40,16 +41,34 @@ class LookupController extends Controller
         return response()->json($tipos);
     }
 
-    // GET /admin/materiais?tipo_id=Y
+    // GET /admin/lookup/materiais?tipo_id=Y (prefixo /lookup: 'materiais' tambem e slug de CRUD)
     public function materiais(Request $request): JsonResponse
     {
         $materiais = Material::query()
+            // Categoria e tipo alimentam o rotulo completo; sem o eager-load seria 1 query por material.
+            ->with('tipo.categoria')
             ->where('ativo', true)
             ->when($request->filled('tipo_id'), fn ($q) => $q->where('tipo_id', $request->integer('tipo_id')))
             ->orderBy('descricao')
-            ->get(['id', 'descricao', 'norma', 'tipo_id']);
+            ->get(['id', 'tipo_id', 'descricao', 'dimensoes', 'norma'])
+            ->map(fn (Material $m) => [
+                'id' => $m->id,
+                'tipo_id' => $m->tipo_id,
+                'descricao' => $m->descricao,
+                'dimensoes' => $m->dimensoes,
+                'norma' => $m->norma,
+                // Rotulo montado no model (fonte unica): o dropdown mostra a especificacao inteira.
+                'especificacao' => $m->especificacao_completa,
+            ])
+            ->values();
 
         return response()->json($materiais);
+    }
+
+    // GET /admin/lookup/unidades?cliente_id=X — unidades ativas do cliente
+    public function unidadesDoCliente(Request $request, ClienteUnidadeService $servico): JsonResponse
+    {
+        return response()->json($servico->ativasDoCliente($request->integer('cliente_id') ?: null));
     }
 
     // GET /admin/processos?sub_processo=...

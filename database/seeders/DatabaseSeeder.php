@@ -4,6 +4,7 @@ namespace Database\Seeders;
 
 use App\Models\CategoriaComponente;
 use App\Models\Cliente;
+use App\Models\ClienteUnidade;
 use App\Models\ComponenteComercial;
 use App\Models\Escopo;
 use App\Models\Material;
@@ -67,9 +68,20 @@ class DatabaseSeeder extends Seeder
             Escopo::firstOrCreate(['descricao' => $desc], ['codigo' => $cod]);
         }
 
-        // ----- Clientes (amostra) -----
-        foreach ([['Vale S.A.', 'PA-001', 'Carajas'], ['Gerdau', 'PA-002', 'Ouro Branco'], ['CSN', 'PA-003', 'Volta Redonda']] as [$nome, $pa, $un]) {
-            Cliente::firstOrCreate(['nome' => $nome], ['codigo_pa' => $pa, 'unidade' => $un]);
+        // ----- Clientes e suas unidades (amostra) -----
+        // Um cliente pode ter varias unidades (ex.: Suzano SA -> Tres Lagoas e Ribas do Rio Pardo).
+        $clientes = [
+            ['Vale S.A.', 'PA-001', ['Carajas']],
+            ['Gerdau', 'PA-002', ['Ouro Branco']],
+            ['CSN', 'PA-003', ['Volta Redonda']],
+            ['Suzano SA', 'PA-004', ['Tres Lagoas', 'Ribas do Rio Pardo']],
+            ['CMPC', 'PA-005', ['Guaiba']],
+        ];
+        foreach ($clientes as [$nome, $pa, $unidades]) {
+            $cliente = Cliente::firstOrCreate(['nome' => $nome], ['codigo_pa' => $pa]);
+            foreach ($unidades as $unidade) {
+                ClienteUnidade::firstOrCreate(['cliente_id' => $cliente->id, 'nome' => $unidade], ['ativo' => true]);
+            }
         }
 
         // ----- Hierarquia de componentes (categoria -> tipo -> material) -----
@@ -81,10 +93,17 @@ class DatabaseSeeder extends Seeder
         $tipoBarra = TipoComponente::firstOrCreate(['categoria_id' => $catMP->id, 'nome' => 'Barra Redonda']);
         TipoComponente::firstOrCreate(['categoria_id' => $catServ->id, 'nome' => 'Torneamento']);
 
+        // Dimensoes em texto livre: chapa mede largura x comprimento, barra mede diametro x comprimento.
         foreach (['ASTM A36', 'SAE 1045', 'ASTM A572 Gr.50'] as $desc) {
-            Material::firstOrCreate(['tipo_id' => $tipoChapa->id, 'descricao' => $desc], ['norma' => $desc]);
+            Material::firstOrCreate(
+                ['tipo_id' => $tipoChapa->id, 'descricao' => $desc],
+                ['norma' => $desc, 'dimensoes' => '1.200 × 6.000']
+            );
         }
-        Material::firstOrCreate(['tipo_id' => $tipoBarra->id, 'descricao' => 'SAE 4140'], ['norma' => 'SAE 4140']);
+        Material::firstOrCreate(
+            ['tipo_id' => $tipoBarra->id, 'descricao' => 'SAE 4140'],
+            ['norma' => 'SAE 4140', 'dimensoes' => 'Ø 50 × 6.000']
+        );
 
         // ----- Componentes comerciais (amostra) -----
         ComponenteComercial::firstOrCreate(['especificacao' => 'Parafuso M12 x 40'], ['categoria_id' => $catCom->id, 'tipo' => 'Parafuso', 'padrao' => 'DIN 933']);

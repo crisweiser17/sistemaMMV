@@ -5,10 +5,17 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use OwenIt\Auditing\Auditable;
+use OwenIt\Auditing\Contracts\Auditable as AuditableContract;
 
-class CotacaoItem extends Model
+/**
+ * Auditable pelo mesmo motivo do LiberacaoItem: o item de origem entra no PI
+ * impresso, e o detalhamento trata PI e cotacao pelo mesmo caminho
+ * (EngenhariaHeader::dadosItemOrigem).
+ */
+class CotacaoItem extends Model implements AuditableContract
 {
-    use SoftDeletes;
+    use Auditable, SoftDeletes;
 
     protected $table = 'cotacao_itens';
 
