@@ -4,13 +4,18 @@ namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
 use App\Models\LoginLog;
+use App\Services\MigracaoAutomaticaService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Log;
 use Illuminate\View\View;
+use Throwable;
 
 class LoginController extends Controller
 {
+    public function __construct(private MigracaoAutomaticaService $migracao) {}
+
     public function show(): View
     {
         return view('auth.login');
@@ -33,29 +38,52 @@ class LoginController extends Controller
 
         $request->session()->regenerate();
 
-        LoginLog::create([
-            'user_id' => Auth::id(),
-            'evento' => 'login',
-            'ip_address' => $request->ip(),
-            'user_agent' => $request->userAgent(),
-        ]);
+        $destino = redirect()->intended(route('demandas.index'));
 
-        return redirect()->intended(route('demandas.index'));
+        // Hospedagem compartilhada nao tem CLI: o administrador que entra aplica
+        // as migrations pendentes do deploy. Falha aqui nao impede o login.
+        //
+        // Vem ANTES do LoginLog de proposito: se um deploy futuro mexer em
+        // login_logs, gravar o log falharia com o schema velho e o administrador
+        // nunca chegaria na migracao que conserta justamente isso.
+        if ($this->migracao->deveExecutar($request->user())) {
+            $resultado = $this->migracao->executar();
+            $destino->with($resultado['ok'] ? 'success' : 'error', $resultado['mensagem']);
+        }
+
+        $this->registrarLog($request, 'login');
+
+        return $destino;
     }
 
     public function logout(Request $request): RedirectResponse
     {
-        LoginLog::create([
-            'user_id' => Auth::id(),
-            'evento' => 'logout',
-            'ip_address' => $request->ip(),
-            'user_agent' => $request->userAgent(),
-        ]);
+        $this->registrarLog($request, 'logout');
 
         Auth::logout();
         $request->session()->invalidate();
         $request->session()->regenerateToken();
 
         return redirect()->route('login');
+    }
+
+    /**
+     * Registra o evento de autenticacao sem nunca derrubar o fluxo.
+     *
+     * Auditoria e importante, mas nao ao ponto de trancar o cliente para fora do
+     * sistema quando a tabela `login_logs` estiver defasada por um deploy.
+     */
+    private function registrarLog(Request $request, string $evento): void
+    {
+        try {
+            LoginLog::create([
+                'user_id' => Auth::id(),
+                'evento' => $evento,
+                'ip_address' => $request->ip(),
+                'user_agent' => $request->userAgent(),
+            ]);
+        } catch (Throwable $e) {
+            Log::warning('Nao foi possivel registrar o evento de '.$evento.': '.$e->getMessage());
+        }
     }
 }
