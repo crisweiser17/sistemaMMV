@@ -2,6 +2,7 @@
 
 use App\Admin\ResourceRegistry;
 use App\Http\Controllers\Admin\AdminController;
+use App\Http\Controllers\Admin\ClienteController;
 use App\Http\Controllers\Admin\CrudController;
 use App\Http\Controllers\Admin\LookupController;
 use App\Http\Controllers\Auth\LoginController;
@@ -109,8 +110,19 @@ Route::middleware(['auth', 'ativo'])->group(function () {
         Route::get('/lookup/materiais', [LookupController::class, 'materiais'])->name('lookup.materiais');
         Route::get('/lookup/unidades', [LookupController::class, 'unidadesDoCliente'])->name('lookup.unidades');
 
+        // Cliente tem tela propria: as unidades (plantas) sao editadas dentro do
+        // cadastro do cliente, num submit so — coisa que o CRUD generico nao faz.
+        Route::prefix('clientes')->name('clientes.')->group(function () {
+            Route::get('/', [ClienteController::class, 'index'])->name('index');
+            Route::get('/create', [ClienteController::class, 'create'])->name('create');
+            Route::post('/', [ClienteController::class, 'store'])->name('store');
+            Route::get('/{id}/edit', [ClienteController::class, 'edit'])->name('edit');
+            Route::put('/{id}', [ClienteController::class, 'update'])->name('update');
+            Route::delete('/{id}', [ClienteController::class, 'destroy'])->name('destroy');
+        });
+
         // CRUD generico — um conjunto de rotas nomeadas por recurso do registry
-        foreach (ResourceRegistry::slugs() as $slug) {
+        foreach (ResourceRegistry::crudSlugs() as $slug) {
             Route::prefix($slug)->name("{$slug}.")->group(function () use ($slug) {
                 Route::get('/', [CrudController::class, 'index'])->defaults('resource', $slug)->name('index');
                 Route::get('/create', [CrudController::class, 'create'])->defaults('resource', $slug)->name('create');

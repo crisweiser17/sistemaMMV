@@ -10,6 +10,7 @@ use App\Models\UnidadeMedida;
 use App\Services\AnexoService;
 use App\Services\ClienteUnidadeService;
 use App\Services\CotacaoService;
+use App\Services\NumeroPedidoService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -70,7 +71,9 @@ class CotacaoController extends Controller
     public function update(Request $request, Cotacao $cotacao): RedirectResponse
     {
         $this->authorize('editar', 'cotacao');
-        [$dados, $itens] = $this->validar($request);
+        // A propria cotacao vai junto: a unicidade do numero precisa ignorar o
+        // registro que esta sendo editado.
+        [$dados, $itens] = $this->validar($request, $cotacao);
 
         $this->service->atualizar($cotacao, $dados, $itens);
 
@@ -125,11 +128,15 @@ class CotacaoController extends Controller
         ];
     }
 
-    /** @return array{0: array, 1: array} dados de cabecalho e itens */
-    private function validar(Request $request): array
+    /**
+     * @param  Cotacao|null  $cotacao  registro sendo editado (null no cadastro novo)
+     * @return array{0: array, 1: array} dados de cabecalho e itens
+     */
+    private function validar(Request $request, ?Cotacao $cotacao = null): array
     {
         $validated = $request->validate([
-            'numero' => 'nullable|string|max:100',
+            // Numero da cotacao e unico no sistema inteiro (nao por cliente, nao por ano).
+            'numero' => NumeroPedidoService::regraDeUnicidade('cotacoes', 'numero', $cotacao?->id),
             'numero_cliente' => 'nullable|string|max:100',
             'cliente_id' => 'nullable|exists:clientes,id',
             'unidade_id' => ClienteUnidadeService::regraDeValidacao($request->integer('cliente_id')),
@@ -153,6 +160,9 @@ class CotacaoController extends Controller
             'itens.*.material_cliente' => 'nullable|string|max:255',
             'itens.*.descricao_cliente' => 'nullable|string',
             'itens.*.observacoes' => 'nullable|string',
+        ], [
+            // Mensagem do operador: a padrao do Laravel fala em "campo numero".
+            'numero.unique' => 'Já existe uma cotação com este número.',
         ]);
 
         $itens = $validated['itens'] ?? [];

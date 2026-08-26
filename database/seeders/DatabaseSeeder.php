@@ -69,18 +69,23 @@ class DatabaseSeeder extends Seeder
         }
 
         // ----- Clientes e suas unidades (amostra) -----
-        // Um cliente pode ter varias unidades (ex.: Suzano SA -> Tres Lagoas e Ribas do Rio Pardo).
+        // Um cliente pode ter varias unidades (ex.: Suzano SA -> Tres Lagoas e Ribas do Rio Pardo)
+        // e o codigo e de cada unidade, nao do cliente (Tres Lagoas 10, Jacarei 25...).
         $clientes = [
-            ['Vale S.A.', 'PA-001', ['Carajas']],
-            ['Gerdau', 'PA-002', ['Ouro Branco']],
-            ['CSN', 'PA-003', ['Volta Redonda']],
-            ['Suzano SA', 'PA-004', ['Tres Lagoas', 'Ribas do Rio Pardo']],
-            ['CMPC', 'PA-005', ['Guaiba']],
+            ['Vale S.A.', ['Carajas' => '01']],
+            ['Gerdau', ['Ouro Branco' => '02']],
+            ['CSN', ['Volta Redonda' => '03']],
+            ['Suzano SA', ['Tres Lagoas' => '10', 'Jacarei' => '25', 'Ribas do Rio Pardo' => '45']],
+            ['Klabin', ['Ortigueira' => '32', 'Telemaco' => '51']],
+            ['CMPC', ['Guaiba' => '24']],
         ];
-        foreach ($clientes as [$nome, $pa, $unidades]) {
-            $cliente = Cliente::firstOrCreate(['nome' => $nome], ['codigo_pa' => $pa]);
-            foreach ($unidades as $unidade) {
-                ClienteUnidade::firstOrCreate(['cliente_id' => $cliente->id, 'nome' => $unidade], ['ativo' => true]);
+        foreach ($clientes as [$nome, $unidades]) {
+            $cliente = Cliente::firstOrCreate(['nome' => $nome]);
+            foreach ($unidades as $unidade => $codigo) {
+                ClienteUnidade::firstOrCreate(
+                    ['cliente_id' => $cliente->id, 'nome' => $unidade],
+                    ['codigo' => $codigo, 'ativo' => true],
+                );
             }
         }
 

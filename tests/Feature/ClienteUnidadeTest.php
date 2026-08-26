@@ -40,7 +40,7 @@ class ClienteUnidadeTest extends TestCase
     /** @return array{0: Cliente, 1: ClienteUnidade, 2: ClienteUnidade} */
     private function clienteComDuasUnidades(): array
     {
-        $cliente = Cliente::create(['nome' => 'Suzano SA', 'codigo_pa' => 'PA-004', 'ativo' => true]);
+        $cliente = Cliente::create(['nome' => 'Suzano SA', 'ativo' => true]);
 
         return [
             $cliente,

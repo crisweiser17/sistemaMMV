@@ -17,7 +17,8 @@ class Cliente extends Model implements AuditableContract
 
     // A coluna legada 'unidade' esta obsoleta desde a criacao de cliente_unidades;
     // permanece na tabela apenas por compatibilidade e nao e mais lida pelo sistema.
-    protected $fillable = ['nome', 'codigo_pa', 'unidade', 'ativo'];
+    // 'codigo_pa' saiu de vez: o codigo e de cada unidade (cliente_unidades.codigo).
+    protected $fillable = ['nome', 'unidade', 'ativo'];
 
     protected $casts = ['ativo' => 'boolean'];
 

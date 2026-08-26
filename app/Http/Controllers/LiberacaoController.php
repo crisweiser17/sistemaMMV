@@ -12,6 +12,7 @@ use App\Models\UnidadeMedida;
 use App\Services\AnexoService;
 use App\Services\ClienteUnidadeService;
 use App\Services\LiberacaoService;
+use App\Services\NumeroPedidoService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
@@ -73,7 +74,9 @@ class LiberacaoController extends Controller
     public function update(Request $request, Liberacao $liberacao): RedirectResponse
     {
         $this->authorize('editar', 'liberacao');
-        [$dados, $itens] = $this->validar($request);
+        // O proprio PI vai junto: a unicidade do numero precisa ignorar o registro
+        // que esta sendo editado.
+        [$dados, $itens] = $this->validar($request, $liberacao);
 
         $this->service->atualizar($liberacao, $dados, $itens);
 
@@ -151,11 +154,15 @@ class LiberacaoController extends Controller
         ];
     }
 
-    /** @return array{0: array, 1: array} */
-    private function validar(Request $request): array
+    /**
+     * @param  Liberacao|null  $liberacao  registro sendo editado (null no cadastro novo)
+     * @return array{0: array, 1: array}
+     */
+    private function validar(Request $request, ?Liberacao $liberacao = null): array
     {
         $validated = $request->validate([
-            'numero_pi' => 'nullable|string|max:100',
+            // Numero do PI e unico no sistema inteiro (nao por cliente, nao por ano).
+            'numero_pi' => NumeroPedidoService::regraDeUnicidade('liberacoes', 'numero_pi', $liberacao?->id),
             'numero_pc' => 'nullable|string|max:100',
             'cliente_id' => 'nullable|exists:clientes,id',
             'unidade_id' => ClienteUnidadeService::regraDeValidacao($request->integer('cliente_id')),
@@ -182,6 +189,9 @@ class LiberacaoController extends Controller
             'itens.*.prazo_entrega_item' => 'nullable|integer|min:0',
             'itens.*.descricao_cliente' => 'nullable|string',
             'itens.*.observacoes' => 'nullable|string',
+        ], [
+            // Mensagem do operador: a padrao do Laravel fala em "campo numero pi".
+            'numero_pi.unique' => 'Já existe um PI com este número.',
         ]);
 
         $itens = $validated['itens'] ?? [];

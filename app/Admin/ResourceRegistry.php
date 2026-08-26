@@ -4,7 +4,6 @@ namespace App\Admin;
 
 use App\Models\CategoriaComponente;
 use App\Models\Cliente;
-use App\Models\ClienteUnidade;
 use App\Models\ComponenteComercial;
 use App\Models\Escopo;
 use App\Models\Material;
@@ -25,24 +24,12 @@ class ResourceRegistry
     public static function all(): array
     {
         return [
+            // Cliente aparece no hub, mas tem controller e views proprios: as unidades
+            // (plantas) sao editadas dentro do cadastro dele. 'crud' => false mantem o
+            // recurso fora do gerador de rotas e do CrudController generico.
             'clientes' => [
                 'label' => 'Clientes', 'singular' => 'Cliente', 'model' => Cliente::class,
-                'fields' => [
-                    ['name' => 'nome', 'label' => 'Nome', 'type' => 'text', 'rules' => 'required|string|max:255', 'list' => true],
-                    ['name' => 'codigo_pa', 'label' => 'Código PA', 'type' => 'text', 'rules' => 'nullable|string|max:50', 'list' => true],
-                    ['name' => 'ativo', 'label' => 'Ativo', 'type' => 'boolean', 'rules' => 'boolean', 'list' => true],
-                ],
-            ],
-            // Unidades (plantas) do cliente — substitui a antiga coluna clientes.unidade.
-            'unidades-cliente' => [
-                'label' => 'Unidades de Cliente', 'singular' => 'Unidade', 'model' => ClienteUnidade::class,
-                'fields' => [
-                    ['name' => 'cliente_id', 'label' => 'Cliente', 'type' => 'select', 'rules' => 'required|exists:clientes,id', 'list' => true,
-                        'optionsFrom' => [Cliente::class, 'nome'], 'display' => 'cliente.nome'],
-                    ['name' => 'nome', 'label' => 'Nome', 'type' => 'text', 'rules' => 'required|string|max:255', 'list' => true],
-                    ['name' => 'codigo', 'label' => 'Código', 'type' => 'text', 'rules' => 'nullable|string|max:50', 'list' => true],
-                    ['name' => 'ativo', 'label' => 'Ativo', 'type' => 'boolean', 'rules' => 'boolean', 'list' => true],
-                ],
+                'crud' => false, 'fields' => [],
             ],
             'escopos' => [
                 'label' => 'Escopos', 'singular' => 'Escopo', 'model' => Escopo::class,
@@ -136,9 +123,13 @@ class ResourceRegistry
         return self::all()[$slug] ?? null;
     }
 
-    /** @return array<int, string> */
-    public static function slugs(): array
+    /**
+     * Recursos servidos pelo CRUD generico (todos menos os que tem tela propria).
+     *
+     * @return array<int, string>
+     */
+    public static function crudSlugs(): array
     {
-        return array_keys(self::all());
+        return array_keys(array_filter(self::all(), fn (array $config) => ($config['crud'] ?? true) !== false));
     }
 }
