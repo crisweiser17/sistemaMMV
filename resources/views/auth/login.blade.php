@@ -5,7 +5,7 @@
 <div class="min-h-screen flex items-center justify-center bg-gray-100 px-4">
     <div class="w-full max-w-sm">
         <div class="text-center mb-6">
-            <img src="{{ asset('img/mmvlogo.png') }}" alt="MMV Equipamentos" class="h-12 w-auto mx-auto">
+            <img src="{{ \App\Support\Assets::versionado('img/mmvlogo.png') }}" alt="MMV Equipamentos" class="h-12 w-auto mx-auto">
             <p class="text-sm text-gray-500 mt-2">Gestão de Pedidos · Equipamentos Industriais</p>
         </div>
 

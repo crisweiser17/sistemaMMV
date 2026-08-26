@@ -79,8 +79,8 @@
     </script>
 
     {{-- Bootstrap Echo + helpers globais e fabricas Alpine (deferred, servidos estaticos) --}}
-    <script defer src="{{ asset('js/app.js') }}"></script>
-    <script defer src="{{ asset('js/alpine/factories.js') }}"></script>
+    <script defer src="{{ \App\Support\Assets::versionado('js/app.js') }}"></script>
+    <script defer src="{{ \App\Support\Assets::versionado('js/alpine/factories.js') }}"></script>
 
     {{-- Alpine por ultimo (defer preserva ordem: helpers/fabricas registram antes do init) --}}
     <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
@@ -92,7 +92,7 @@
     <aside class="w-60 bg-mmv-700 text-gray-100 flex-shrink-0 hidden md:block">
         <div class="h-16 flex items-center px-6 border-b border-white/10">
             <span class="inline-flex items-center bg-white rounded-md px-2 py-1">
-                <img src="{{ asset('img/mmvlogo.png') }}" alt="MMV" class="h-6 w-auto">
+                <img src="{{ \App\Support\Assets::versionado('img/mmvlogo.png') }}" alt="MMV" class="h-6 w-auto">
             </span>
         </div>
         <nav class="p-3 space-y-1 text-sm">
@@ -109,7 +109,7 @@
                class="relative w-64 max-w-[80%] h-full bg-mmv-700 text-gray-100 flex flex-col">
             <div class="h-16 flex items-center justify-between px-4 border-b border-white/10">
                 <span class="inline-flex items-center bg-white rounded-md px-2 py-1">
-                    <img src="{{ asset('img/mmvlogo.png') }}" alt="MMV" class="h-6 w-auto">
+                    <img src="{{ \App\Support\Assets::versionado('img/mmvlogo.png') }}" alt="MMV" class="h-6 w-auto">
                 </span>
                 <button @click="sidebar = false" class="text-white/70 hover:text-white p-2 -mr-2" aria-label="Fechar menu">
                     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-6 h-6"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12" /></svg>
