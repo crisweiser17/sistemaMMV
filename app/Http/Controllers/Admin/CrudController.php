@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Admin;
 
 use App\Admin\ResourceRegistry;
 use App\Http\Controllers\Controller;
+use App\Models\Perfil;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -25,6 +26,18 @@ class CrudController extends Controller
         $config['slug'] = $slug;
 
         return $config;
+    }
+
+    /** Recursos marcados 'apenasAdministrador' so podem ser alterados pelo perfil Administrador. */
+    private function podeAlterar(Request $request, array $config): bool
+    {
+        return ! ($config['apenasAdministrador'] ?? false) || (bool) $request->user()?->ehAdministrador();
+    }
+
+    private function exigirPodeAlterar(Request $request, array $config): void
+    {
+        abort_unless($this->podeAlterar($request, $config), Response::HTTP_FORBIDDEN,
+            "Apenas o Administrador pode alterar {$config['label']}.");
     }
 
     /** Resolve opcoes de selects declaradas via optionsFrom => [ModelClass, labelColumn]. */
@@ -64,13 +77,15 @@ class CrudController extends Controller
             ->unique()->values()->all();
 
         $registros = $model::query()->with($with)->latest()->paginate(15);
+        $podeAlterar = $this->podeAlterar($request, $config);
 
-        return view('admin.crud.index', compact('config', 'registros'));
+        return view('admin.crud.index', compact('config', 'registros', 'podeAlterar'));
     }
 
     public function create(Request $request): View
     {
         $config = $this->withOptions($this->config($request));
+        $this->exigirPodeAlterar($request, $config);
         $registro = null;
 
         return view('admin.crud.form', compact('config', 'registro'));
@@ -79,6 +94,7 @@ class CrudController extends Controller
     public function store(Request $request): RedirectResponse
     {
         $config = $this->config($request);
+        $this->exigirPodeAlterar($request, $config);
         $model = $config['model'];
 
         $data = $this->validateData($request, $config);
@@ -91,6 +107,7 @@ class CrudController extends Controller
     public function edit(Request $request, int $id): View
     {
         $config = $this->withOptions($this->config($request));
+        $this->exigirPodeAlterar($request, $config);
         $registro = $config['model']::findOrFail($id);
 
         return view('admin.crud.form', compact('config', 'registro'));
@@ -99,9 +116,16 @@ class CrudController extends Controller
     public function update(Request $request, int $id): RedirectResponse
     {
         $config = $this->config($request);
+        $this->exigirPodeAlterar($request, $config);
         $registro = $config['model']::findOrFail($id);
 
-        $registro->update($this->validateData($request, $config));
+        $data = $this->validateData($request, $config);
+        // O acesso de administrador e reconhecido pelo nome do perfil: renomear o
+        // Administrador tiraria de todo mundo a chance de voltar a editar perfis.
+        if ($registro instanceof Perfil && $registro->ehAdministrador()) {
+            $data['nome'] = Perfil::ADMINISTRADOR;
+        }
+        $registro->update($data);
 
         return redirect()->route("admin.{$config['slug']}.index")
             ->with('success', "{$config['singular']} atualizado com sucesso.");
@@ -110,7 +134,13 @@ class CrudController extends Controller
     public function destroy(Request $request, int $id): RedirectResponse
     {
         $config = $this->config($request);
-        $config['model']::findOrFail($id)->delete();
+        $this->exigirPodeAlterar($request, $config);
+        $registro = $config['model']::findOrFail($id);
+
+        if ($registro instanceof Perfil && $registro->ehAdministrador()) {
+            return back()->with('error', 'O perfil Administrador não pode ser removido.');
+        }
+        $registro->delete();
 
         return redirect()->route("admin.{$config['slug']}.index")
             ->with('success', "{$config['singular']} removido.");
@@ -121,6 +151,9 @@ class CrudController extends Controller
         $rules = [];
         foreach ($config['fields'] as $field) {
             $rules[$field['name']] = $field['rules'] ?? 'nullable';
+            if ($field['type'] === 'permissoes') {
+                $rules[$field['name'].'.*'] = 'in:'.implode(',', array_keys(Perfil::NIVEIS));
+            }
         }
         $data = $request->validate($rules);
 
@@ -132,6 +165,13 @@ class CrudController extends Controller
             } elseif ($field['type'] === 'json') {
                 $raw = $request->input($name);
                 $data[$name] = is_string($raw) ? (json_decode($raw, true) ?: []) : ($raw ?: []);
+            } elseif ($field['type'] === 'permissoes') {
+                // Grava so os modulos conhecidos com acesso; 'nenhum' fica de fora do JSON.
+                $niveis = (array) $request->input($name, []);
+                $data[$name] = collect(Perfil::MODULOS)
+                    ->map(fn ($m, $modulo) => $niveis[$modulo] ?? 'nenhum')
+                    ->reject(fn ($nivel) => $nivel === 'nenhum')
+                    ->all();
             }
         }
 

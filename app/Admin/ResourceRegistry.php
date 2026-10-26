@@ -109,9 +109,12 @@ class ResourceRegistry
             ],
             'perfis' => [
                 'label' => 'Perfis', 'singular' => 'Perfil', 'model' => Perfil::class,
+                // Perfil decide o que cada usuario pode fazer: so o Administrador cria,
+                // edita ou remove. Os demais enxergam a lista em modo leitura.
+                'apenasAdministrador' => true,
                 'fields' => [
                     ['name' => 'nome', 'label' => 'Nome', 'type' => 'text', 'rules' => 'required|string|max:255', 'list' => true],
-                    ['name' => 'permissoes', 'label' => 'Permissões (JSON)', 'type' => 'json', 'rules' => 'nullable'],
+                    ['name' => 'permissoes', 'label' => 'Permissões', 'type' => 'permissoes', 'rules' => 'nullable|array', 'list' => true],
                     ['name' => 'ativo', 'label' => 'Ativo', 'type' => 'boolean', 'rules' => 'boolean', 'list' => true],
                 ],
             ],

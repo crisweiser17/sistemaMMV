@@ -37,6 +37,11 @@ class User extends Authenticatable
         return $this->perfil && in_array($this->perfil->nome, $perfis, true);
     }
 
+    public function ehAdministrador(): bool
+    {
+        return $this->temPerfil(Perfil::ADMINISTRADOR);
+    }
+
     /** Verifica permissao granular declarada no JSON do perfil. */
     public function podeEm(string $modulo, string $acao = 'ver'): bool
     {

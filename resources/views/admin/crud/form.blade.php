@@ -9,10 +9,20 @@
         @csrf
         @if ($registro) @method('PUT') @endif
 
+        @php
+            // O nome do Administrador e o que reconhece o acesso de admin: fica travado.
+            $nomeTravado = $registro instanceof \App\Models\Perfil && $registro->ehAdministrador();
+        @endphp
+
         @foreach ($config['fields'] as $f)
             @php $valor = old($f['name'], $registro?->{$f['name']}); @endphp
 
-            @if ($f['type'] === 'boolean')
+            @if ($nomeTravado && $f['name'] === 'nome')
+                <div>
+                    <x-input :label="$f['label']" :name="$f['name']" :value="$valor" readonly class="bg-gray-50 text-gray-500" />
+                    <span class="block text-xs text-gray-500 mt-1">O perfil Administrador não pode ser renomeado.</span>
+                </div>
+            @elseif ($f['type'] === 'boolean')
                 <label class="flex items-center gap-2 text-sm text-gray-700">
                     <input type="hidden" name="{{ $f['name'] }}" value="0">
                     <input type="checkbox" name="{{ $f['name'] }}" value="1" @checked($valor) class="rounded border-gray-300">
@@ -33,6 +43,8 @@
                         class="w-full rounded-md border-gray-300 shadow-sm font-mono text-xs">{{ is_array($valor) ? json_encode($valor, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE) : $valor }}</textarea>
                     <span class="text-xs text-gray-400">Ex.: {"cotacao":"editar","engenharia":"ver"}</span>
                 </label>
+            @elseif ($f['type'] === 'permissoes')
+                @include('admin.crud.partials.permissoes', ['f' => $f, 'registro' => $registro])
             @elseif ($f['type'] === 'color')
                 <label class="block">
                     <span class="block text-sm font-medium text-gray-700 mb-1">{{ $f['label'] }}</span>
