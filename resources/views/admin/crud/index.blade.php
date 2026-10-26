@@ -48,6 +48,8 @@
                                         @endforeach
                                         @if (empty($registro->permissoes))<span class="text-gray-400">Sem acesso</span>@endif
                                     </div>
+                                @elseif ($f['type'] === 'usuarios')
+                                    {{ $registro->users->pluck('name')->sort()->join(', ') ?: '—' }}
                                 @elseif ($f['type'] === 'color')
                                     <span class="inline-flex items-center gap-2">
                                         <span class="w-4 h-4 rounded" style="background: {{ $registro->{$f['name']} }}"></span>

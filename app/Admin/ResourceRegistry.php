@@ -131,6 +131,8 @@ class ResourceRegistry
                 'fields' => [
                     ['name' => 'nome', 'label' => 'Nome', 'type' => 'text', 'rules' => 'required|string|max:255', 'list' => true],
                     ['name' => 'permissoes', 'label' => 'Permissões', 'type' => 'permissoes', 'rules' => 'nullable|array', 'list' => true],
+                    // Nao e coluna: define quais usuarios recebem este perfil (cada usuario tem um so).
+                    ['name' => 'usuarios', 'label' => 'Usuários', 'type' => 'usuarios', 'rules' => 'nullable|array', 'list' => true],
                     ['name' => 'ativo', 'label' => 'Ativo', 'type' => 'boolean', 'rules' => 'boolean', 'list' => true],
                 ],
             ],

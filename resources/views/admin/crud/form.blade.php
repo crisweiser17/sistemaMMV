@@ -53,6 +53,8 @@
                 </label>
             @elseif ($f['type'] === 'permissoes')
                 @include('admin.crud.partials.permissoes', ['f' => $f, 'registro' => $registro])
+            @elseif ($f['type'] === 'usuarios')
+                @include('admin.crud.partials.usuarios', ['f' => $f, 'registro' => $registro])
             @elseif ($f['type'] === 'color')
                 <label class="block">
                     <span class="block text-sm font-medium text-gray-700 mb-1">{{ $f['label'] }}</span>

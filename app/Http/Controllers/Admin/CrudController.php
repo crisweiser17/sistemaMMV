@@ -60,6 +60,8 @@ class CrudController extends Controller
         foreach ($config['fields'] as &$field) {
             if ($field['type'] === 'select') {
                 $field['_options'] = $this->selectOptions($field);
+            } elseif ($field['type'] === 'usuarios') {
+                $field['_usuarios'] = User::query()->with('perfil')->orderBy('name')->get();
             }
         }
 
@@ -76,6 +78,9 @@ class CrudController extends Controller
             ->filter(fn ($f) => isset($f['display']) && str_contains($f['display'], '.'))
             ->map(fn ($f) => Str::before($f['display'], '.'))
             ->unique()->values()->all();
+        if (collect($config['fields'])->contains('type', 'usuarios')) {
+            $with[] = 'users';
+        }
 
         $registros = $model::query()->with($with)->latest()->paginate(15);
         $podeAlterar = $this->podeAlterar($request, $config);
@@ -99,7 +104,12 @@ class CrudController extends Controller
         $model = $config['model'];
 
         $data = $this->validateData($request, $config);
-        $model::create($data);
+        [$data, $usuarios] = $this->separarUsuarios($config, $data);
+        if ($erro = $this->erroAoAtribuirUsuarios($request, null, $usuarios)) {
+            return back()->withInput()->with('error', $erro);
+        }
+        $registro = $model::create($data);
+        $this->sincronizarUsuarios($registro, $usuarios);
 
         return redirect()->route("admin.{$config['slug']}.index")
             ->with('success', "{$config['singular']} criado com sucesso.");
@@ -121,6 +131,10 @@ class CrudController extends Controller
         $registro = $config['model']::findOrFail($id);
 
         $data = $this->validateData($request, $config, $registro->getKey());
+        [$data, $usuarios] = $this->separarUsuarios($config, $data);
+        if ($erro = $this->erroAoAtribuirUsuarios($request, $registro, $usuarios)) {
+            return back()->withInput()->with('error', $erro);
+        }
         // O acesso de administrador e reconhecido pelo nome do perfil: renomear o
         // Administrador tiraria de todo mundo a chance de voltar a editar perfis.
         if ($registro instanceof Perfil && $registro->ehAdministrador()) {
@@ -137,6 +151,7 @@ class CrudController extends Controller
             }
         }
         $registro->update($data);
+        $this->sincronizarUsuarios($registro, $usuarios);
 
         return redirect()->route("admin.{$config['slug']}.index")
             ->with('success', "{$config['singular']} atualizado com sucesso.");
@@ -160,6 +175,57 @@ class CrudController extends Controller
             ->with('success', "{$config['singular']} removido.");
     }
 
+    /**
+     * Tira do $data o campo 'usuarios' (nao e coluna). Devolve null quando o formulario
+     * nao enviou a lista, para nao mexer nos usuarios do perfil.
+     *
+     * @return array{0: array, 1: array<int, int>|null}
+     */
+    private function separarUsuarios(array $config, array $data): array
+    {
+        $campo = collect($config['fields'])->firstWhere('type', 'usuarios');
+        if (! $campo) {
+            return [$data, null];
+        }
+        $usuarios = $data[$campo['name']] ?? null;
+        unset($data[$campo['name']]);
+
+        return [$data, $usuarios];
+    }
+
+    /** Impede que o Administrador logado se tire do proprio perfil pela tela de perfis. */
+    private function erroAoAtribuirUsuarios(Request $request, ?Model $perfil, ?array $usuarios): ?string
+    {
+        $eu = $request->user();
+        if ($usuarios === null || ! $eu?->ehAdministrador()) {
+            return null;
+        }
+        $marcado = in_array($eu->getKey(), $usuarios, true);
+        $perfilAdmin = $perfil instanceof Perfil && $perfil->ehAdministrador();
+
+        if ($perfilAdmin && ! $marcado) {
+            return 'Você não pode tirar o seu próprio usuário do perfil Administrador.';
+        }
+        if (! $perfilAdmin && $marcado) {
+            return 'Você não pode trocar o seu próprio perfil de Administrador.';
+        }
+
+        return null;
+    }
+
+    /**
+     * Marcados passam para este perfil (saindo do anterior, ja que cada usuario tem um so);
+     * desmarcados que estavam nele ficam sem perfil, ou seja, sem acesso.
+     */
+    private function sincronizarUsuarios(Model $perfil, ?array $usuarios): void
+    {
+        if ($usuarios === null) {
+            return;
+        }
+        User::query()->whereIn('id', $usuarios)->update(['perfil_id' => $perfil->getKey()]);
+        User::query()->where('perfil_id', $perfil->getKey())->whereNotIn('id', $usuarios)->update(['perfil_id' => null]);
+    }
+
     /** $id e o registro em edicao (null na criacao): substitui {id} nas regras, ex. unique. */
     private function validateData(Request $request, array $config, ?int $id = null): array
     {
@@ -171,6 +237,9 @@ class CrudController extends Controller
             }
             if ($field['type'] === 'permissoes') {
                 $rules[$field['name'].'.*'] = 'in:'.implode(',', array_keys(Perfil::NIVEIS));
+            }
+            if ($field['type'] === 'usuarios') {
+                $rules[$field['name'].'.*'] = 'nullable|integer|exists:users,id';
             }
         }
         $data = $request->validate($rules);
@@ -188,6 +257,11 @@ class CrudController extends Controller
             } elseif ($field['type'] === 'json') {
                 $raw = $request->input($name);
                 $data[$name] = is_string($raw) ? (json_decode($raw, true) ?: []) : ($raw ?: []);
+            } elseif ($field['type'] === 'usuarios') {
+                // O form manda um usuarios[] vazio para "nenhum marcado"; sem a chave, nao mexe.
+                $data[$name] = $request->has($name)
+                    ? collect((array) $request->input($name))->filter()->map(fn ($id) => (int) $id)->unique()->values()->all()
+                    : null;
             } elseif ($field['type'] === 'permissoes') {
                 // Grava so os modulos conhecidos com acesso; 'nenhum' fica de fora do JSON.
                 $niveis = (array) $request->input($name, []);
