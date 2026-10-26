@@ -63,6 +63,7 @@ Route::middleware(['auth', 'ativo'])->group(function () {
         Route::get('/data', [DemandaController::class, 'data'])->name('data');
         Route::put('/{demanda}/alocar', [DemandaController::class, 'alocar'])->name('alocar');
         Route::put('/{demanda}/status', [DemandaController::class, 'status'])->name('status');
+        Route::delete('/{demanda}', [DemandaController::class, 'destroy'])->name('destroy');
     });
 
     // Engenharia

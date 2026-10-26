@@ -84,4 +84,14 @@ class DemandaController extends Controller
 
         return response()->json(['ok' => true]);
     }
+
+    /** Exclusao restrita ao Administrador (permissao 'editar' nao basta). */
+    public function destroy(Request $request, Demanda $demanda): JsonResponse
+    {
+        abort_unless($request->user()->ehAdministrador(), 403);
+
+        $this->service->excluir($demanda);
+
+        return response()->json(['ok' => true, 'message' => 'Demanda excluída.']);
+    }
 }

@@ -8,7 +8,9 @@
         {
             filtros: { responsavel_id: '', status_id: '', tipo: '', busca: '', cliente_id: '', unidade_id: '' },
             podeEditar: {{ auth()->user()->can('editar', 'demandas') ? 'true' : 'false' }},
+            podeExcluir: {{ auth()->user()->ehAdministrador() ? 'true' : 'false' }},
             alocarModal: { aberto: false, demandaId: null, responsavel_id: '' },
+            excluirModal: { aberto: false, demanda: null, enviando: false },
             expandida: null,
             aplicar() { this.load(this.filtros); },
             // Trocar de cliente zera a unidade e recarrega as opcoes daquele cliente.
@@ -27,6 +29,18 @@
                     this.alocarModal.aberto = false;
                     this.load(this.filtros);
                 } catch (e) { window.mmvToast('Falha ao alocar.', 'error'); }
+            },
+            abrirExcluir(d) { this.excluirModal = { aberto: true, demanda: d, enviando: false }; },
+            async confirmarExclusao() {
+                this.excluirModal.enviando = true;
+                try {
+                    const r = await window.mmvFetch(`/demandas/${this.excluirModal.demanda.id}`, { method: 'DELETE' });
+                    window.mmvToast(r.message || 'Demanda excluída.');
+                    this.excluirModal.aberto = false;
+                    this.load(this.filtros);
+                } catch (e) {
+                    window.mmvToast('Falha ao excluir.', 'error');
+                } finally { this.excluirModal.enviando = false; }
             }
         }
     )">
@@ -122,7 +136,8 @@
                             </td>
                             <td class="py-2 text-right whitespace-nowrap">
                                 <button x-show="podeEditar" @click="abrirAlocar(d.id)" class="text-accent-700 hover:underline">Alocar</button>
-                                <span x-show="!podeEditar" class="text-gray-300">—</span>
+                                <button x-show="podeExcluir" @click="abrirExcluir(d)" class="ml-3 text-red-600 hover:underline">Excluir</button>
+                                <span x-show="!podeEditar && !podeExcluir" class="text-gray-300">—</span>
                             </td>
                         </tr>
                         <tr x-show="expandida === d.id" class="bg-gray-50">
@@ -157,6 +172,19 @@
         <x-slot:footer>
             <x-button variant="secondary" @click="alocarModal.aberto = false">Cancelar</x-button>
             <x-button @click="confirmarAlocacao()" x-bind:disabled="!alocarModal.responsavel_id">Confirmar alocação</x-button>
+        </x-slot:footer>
+    </x-modal>
+
+    <x-modal x-model="excluirModal.aberto">
+        <x-slot:header>Excluir demanda</x-slot:header>
+        <p class="text-sm text-gray-600">
+            Excluir a demanda <strong x-text="excluirModal.demanda?.numero_referencia"></strong>?
+            <span x-text="excluirModal.demanda?.tipo === 'cotacao' ? 'A cotação' : 'O PI'"></span> de origem e a estrutura de engenharia
+            dos itens também serão excluídos, e o número fica livre para ser lançado de novo.
+        </p>
+        <x-slot:footer>
+            <x-button variant="secondary" @click="excluirModal.aberto = false">Cancelar</x-button>
+            <x-button variant="danger" @click="confirmarExclusao()" x-bind:disabled="excluirModal.enviando">Excluir</x-button>
         </x-slot:footer>
     </x-modal>
 </div>

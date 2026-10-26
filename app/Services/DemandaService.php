@@ -106,6 +106,22 @@ class DemandaService
     }
 
     /**
+     * Exclui a demanda junto com o que so existe por causa dela: os headers de
+     * engenharia e o PI/cotacao de origem. Tudo por soft delete (recuperavel), e o
+     * indice unico parcial libera o numero do PI/cotacao para ser lancado de novo.
+     */
+    public function excluir(Demanda $demanda): void
+    {
+        DB::transaction(function () use ($demanda) {
+            $demanda->headers()->get()->each->delete();
+            $demanda->referencia()?->delete();
+            $demanda->delete();
+        });
+
+        $this->emitir(new DemandaAtualizada($demanda));
+    }
+
+    /**
      * Recalcula o status da demanda a partir dos headers de engenharia.
      * Se todos os itens estiverem finalizados, marca a demanda como Finalizado.
      */
