@@ -7,6 +7,7 @@ use App\Models\Output;
 use App\Support\MapaAlteracoes;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 
 /**
  * Motor de Output: monta os dados do documento PI da DEMANDA (um grupo de linhas
@@ -72,8 +73,9 @@ class OutputService
 
         $pdf = Pdf::loadView('output.pi', $dados)->setPaper('a4', 'portrait');
 
+        // Sufixo aleatorio: dois PDFs no mesmo segundo nao podem sobrescrever a versao anterior.
         $timestamp = now()->format('Ymd_His');
-        $path = "outputs/demanda/{$demanda->id}/{$timestamp}.pdf";
+        $path = "outputs/demanda/{$demanda->id}/{$timestamp}_".Str::lower(Str::random(6)).'.pdf';
         Storage::put($path, $pdf->output());
 
         return Output::create([

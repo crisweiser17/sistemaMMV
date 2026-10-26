@@ -90,7 +90,8 @@ Route::middleware(['auth', 'ativo'])->group(function () {
     Route::prefix('output')->name('output.')->group(function () {
         Route::get('/{demanda}', [OutputController::class, 'preview'])->name('preview');
         Route::post('/{demanda}/gerar', [OutputController::class, 'gerar'])->name('gerar');
-        Route::get('/{demanda}/download', [OutputController::class, 'download'])->name('download');
+        // Sem {output}: baixa a versao mais recente; com ele, uma versao do historico.
+        Route::get('/{demanda}/download/{output?}', [OutputController::class, 'download'])->name('download');
         Route::get('/{demanda}/historico', [OutputController::class, 'historico'])->name('historico');
         // Historico das mudancas feitas depois do ultimo PDF (tela propria: a lista
         // e cronologica e por campo, nao cabe junto da lista de versoes do PDF).

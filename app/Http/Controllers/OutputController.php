@@ -35,12 +35,15 @@ class OutputController extends Controller
         return redirect()->route('output.historico', $demanda)->with('success', 'PDF gerado com sucesso.');
     }
 
-    public function download(Demanda $demanda): StreamedResponse
+    public function download(Demanda $demanda, ?int $output = null): StreamedResponse
     {
-        $output = $demanda->outputs()->firstOrFail();
-        abort_unless(Storage::exists($output->path_pdf), 404);
+        // Busca pela relacao: um id de versao de outra demanda da 404, nao baixa o PDF alheio.
+        $versao = $output ? $demanda->outputs()->findOrFail($output) : $demanda->outputs()->firstOrFail();
+        abort_unless(Storage::exists($versao->path_pdf), 404);
 
-        return Storage::download($output->path_pdf, "PI-demanda-{$demanda->id}.pdf");
+        $sufixo = $output ? '-'.$versao->gerado_em->format('Ymd_His') : '';
+
+        return Storage::download($versao->path_pdf, "PI-demanda-{$demanda->id}{$sufixo}.pdf");
     }
 
     public function historico(Demanda $demanda): View

@@ -42,7 +42,7 @@ class Demanda extends Model implements AuditableContract
 
     public function outputs(): HasMany
     {
-        return $this->hasMany(Output::class, 'demanda_id')->latest('gerado_em');
+        return $this->hasMany(Output::class, 'demanda_id')->latest('gerado_em')->latest('id');
     }
 
     /** Resolve a referencia (Cotacao ou Liberacao) conforme o tipo. */

@@ -19,9 +19,13 @@
         <tbody class="divide-y">
             @forelse ($demanda->outputs as $o)
                 <tr>
-                    <td class="py-2 pr-4">{{ optional($o->gerado_em)->format('d/m/Y H:i') }}</td>
+                    <td class="py-2 pr-4">
+                        {{ optional($o->gerado_em)->format('d/m/Y H:i') }}
+                        @if ($loop->first)<span class="ml-1 text-xs text-gray-500">(vigente)</span>@endif
+                    </td>
                     <td class="py-2 pr-4">{{ $o->autor?->name ?? '—' }}</td>
-                    <td class="py-2 text-right"><a href="{{ route('output.download', $demanda) }}" class="text-accent-700 hover:underline">Baixar último</a></td>
+                    {{-- Cada linha baixa a propria versao; antes todas apontavam para a ultima. --}}
+                    <td class="py-2 text-right"><a href="{{ route('output.download', [$demanda, $o->id]) }}" class="text-accent-700 hover:underline">Baixar</a></td>
                 </tr>
             @empty
                 <tr><td colspan="3" class="py-6 text-center text-gray-400">Nenhum PDF gerado ainda.</td></tr>
