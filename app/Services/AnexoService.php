@@ -7,6 +7,8 @@ use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use RuntimeException;
+use Symfony\Component\HttpFoundation\BinaryFileResponse;
+use Symfony\Component\HttpFoundation\ResponseHeaderBag;
 
 /**
  * Regras e persistencia de anexos (desenhos tecnicos e documentos).
@@ -98,6 +100,25 @@ class AnexoService
         }
 
         return $path;
+    }
+
+    /**
+     * Envia um arquivo gravado. Nao usa Storage::response()/download() de proposito:
+     * eles transmitem com fpassthru(), que a hospedagem (Cloudways) desativa e
+     * derruba qualquer download com erro 500. BinaryFileResponse usa fread/fwrite.
+     *
+     * $baixar: true forca o download (attachment); false abre no navegador (inline).
+     */
+    public static function enviar(string $path, string $nome, bool $baixar = true, ?Filesystem $disco = null): BinaryFileResponse
+    {
+        // O fallback ASCII vai no header para navegadores antigos: sem acento, % ou barras.
+        $fallback = str_replace(['%', '/', '\\'], '', Str::ascii($nome)) ?: 'arquivo';
+
+        return (new BinaryFileResponse(($disco ?? self::disco())->path($path)))->setContentDisposition(
+            $baixar ? ResponseHeaderBag::DISPOSITION_ATTACHMENT : ResponseHeaderBag::DISPOSITION_INLINE,
+            $nome,
+            $fallback,
+        );
     }
 
     /** Remove o arquivo do disco; ausencia nao e erro (anexo ja removido). */

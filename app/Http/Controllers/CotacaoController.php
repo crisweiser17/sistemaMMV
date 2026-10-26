@@ -15,7 +15,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
-use Symfony\Component\HttpFoundation\StreamedResponse;
+use Symfony\Component\HttpFoundation\BinaryFileResponse;
 
 class CotacaoController extends Controller
 {
@@ -99,13 +99,13 @@ class CotacaoController extends Controller
     }
 
     /** Serve o anexo inline (preview/abrir em nova aba). */
-    public function verAnexo(Cotacao $cotacao, CotacaoAnexo $anexo): StreamedResponse
+    public function verAnexo(Cotacao $cotacao, CotacaoAnexo $anexo): BinaryFileResponse
     {
         $this->authorize('ver', 'cotacao');
         abort_unless($anexo->cotacao_id === $cotacao->id, 404);
         abort_unless(AnexoService::disco()->exists($anexo->path), 404);
 
-        return AnexoService::disco()->response($anexo->path, $anexo->nome_arquivo);
+        return AnexoService::enviar($anexo->path, $anexo->nome_arquivo, baixar: false);
     }
 
     public function removeAnexo(Cotacao $cotacao, CotacaoAnexo $anexo): RedirectResponse

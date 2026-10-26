@@ -4,12 +4,13 @@ namespace App\Http\Controllers;
 
 use App\Models\Demanda;
 use App\Services\AlteracaoService;
+use App\Services\AnexoService;
 use App\Services\OutputService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\View\View;
-use Symfony\Component\HttpFoundation\StreamedResponse;
+use Symfony\Component\HttpFoundation\BinaryFileResponse;
 
 class OutputController extends Controller
 {
@@ -35,7 +36,7 @@ class OutputController extends Controller
         return redirect()->route('output.historico', $demanda)->with('success', 'PDF gerado com sucesso.');
     }
 
-    public function download(Demanda $demanda, ?int $output = null): StreamedResponse
+    public function download(Demanda $demanda, ?int $output = null): BinaryFileResponse
     {
         // Busca pela relacao: um id de versao de outra demanda da 404, nao baixa o PDF alheio.
         $versao = $output ? $demanda->outputs()->findOrFail($output) : $demanda->outputs()->firstOrFail();
@@ -43,7 +44,7 @@ class OutputController extends Controller
 
         $sufixo = $output ? '-'.$versao->gerado_em->format('Ymd_His') : '';
 
-        return Storage::download($versao->path_pdf, "PI-demanda-{$demanda->id}{$sufixo}.pdf");
+        return AnexoService::enviar($versao->path_pdf, "PI-demanda-{$demanda->id}{$sufixo}.pdf", disco: Storage::disk());
     }
 
     public function historico(Demanda $demanda): View

@@ -37,6 +37,12 @@ class DownloadPdfTest extends TestCase
         return $demanda;
     }
 
+    /** Download e BinaryFileResponse (sem fpassthru, desativado na producao): le o arquivo enviado. */
+    private function conteudo($resp): string
+    {
+        return file_get_contents($resp->assertOk()->getFile()->getPathname());
+    }
+
     public function test_baixar_ultimo_pdf_gerado(): void
     {
         Storage::fake();
@@ -50,7 +56,7 @@ class DownloadPdfTest extends TestCase
 
         $resp = $this->get(route('output.download', $demanda));
         $resp->assertOk()->assertDownload("PI-demanda-{$demanda->id}.pdf");
-        $this->assertStringStartsWith('%PDF', $resp->streamedContent());
+        $this->assertStringStartsWith('%PDF', $this->conteudo($resp));
     }
 
     public function test_cada_versao_do_historico_baixa_o_proprio_pdf(): void
@@ -71,8 +77,8 @@ class DownloadPdfTest extends TestCase
             ->assertSee(route('output.download', [$demanda, $antiga->id]))
             ->assertSee(route('output.download', [$demanda, $nova->id]));
 
-        $this->assertSame('%PDF-versao-antiga', $this->get(route('output.download', [$demanda, $antiga->id]))->streamedContent());
-        $this->assertNotSame('%PDF-versao-antiga', $this->get(route('output.download', $demanda))->streamedContent());
+        $this->assertSame('%PDF-versao-antiga', $this->conteudo($this->get(route('output.download', [$demanda, $antiga->id]))));
+        $this->assertNotSame('%PDF-versao-antiga', $this->conteudo($this->get(route('output.download', $demanda))));
 
         // Versao de outra demanda nao vaza pela URL desta.
         $outra = Demanda::create(['tipo' => 'liberacao', 'referencia_id' => $demanda->referencia_id]);

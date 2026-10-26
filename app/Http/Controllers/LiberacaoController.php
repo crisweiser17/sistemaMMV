@@ -16,7 +16,7 @@ use App\Services\NumeroPedidoService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
-use Symfony\Component\HttpFoundation\StreamedResponse;
+use Symfony\Component\HttpFoundation\BinaryFileResponse;
 
 class LiberacaoController extends Controller
 {
@@ -105,13 +105,13 @@ class LiberacaoController extends Controller
     }
 
     /** Serve o anexo geral do PI inline (preview/abrir em nova aba). */
-    public function verAnexo(Liberacao $liberacao, LiberacaoAnexo $anexo): StreamedResponse
+    public function verAnexo(Liberacao $liberacao, LiberacaoAnexo $anexo): BinaryFileResponse
     {
         $this->authorize('ver', 'liberacao');
         abort_unless($anexo->liberacao_id === $liberacao->id, 404);
         abort_unless(AnexoService::disco()->exists($anexo->path), 404);
 
-        return AnexoService::disco()->response($anexo->path, $anexo->nome_arquivo);
+        return AnexoService::enviar($anexo->path, $anexo->nome_arquivo, baixar: false);
     }
 
     public function removeAnexo(Liberacao $liberacao, LiberacaoAnexo $anexo): RedirectResponse
@@ -125,13 +125,13 @@ class LiberacaoController extends Controller
     }
 
     /** Serve o anexo de um item inline (preview/abrir em nova aba). */
-    public function verAnexoItem(Liberacao $liberacao, LiberacaoItemAnexo $anexo): StreamedResponse
+    public function verAnexoItem(Liberacao $liberacao, LiberacaoItemAnexo $anexo): BinaryFileResponse
     {
         $this->authorize('ver', 'liberacao');
         abort_unless($anexo->item?->liberacao_id === $liberacao->id, 404);
         abort_unless(AnexoService::disco()->exists($anexo->path), 404);
 
-        return AnexoService::disco()->response($anexo->path, $anexo->nome_arquivo);
+        return AnexoService::enviar($anexo->path, $anexo->nome_arquivo, baixar: false);
     }
 
     public function removeAnexoItem(Liberacao $liberacao, LiberacaoItemAnexo $anexo): RedirectResponse

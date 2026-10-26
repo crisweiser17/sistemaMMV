@@ -20,7 +20,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 use Illuminate\View\View;
-use Symfony\Component\HttpFoundation\StreamedResponse;
+use Symfony\Component\HttpFoundation\BinaryFileResponse;
 
 class EngenhariaController extends Controller
 {
@@ -288,14 +288,14 @@ class EngenhariaController extends Controller
         return response()->json(['ok' => true]);
     }
 
-    /** Serve o arquivo da linha inline (preview/abrir em nova aba). */
-    public function verArquivo(EngenhariaHeader $header, EngenhariaLinha $linha): StreamedResponse
+    /** Baixa o arquivo da linha (attachment): DWG/STEP nao abrem no navegador mesmo. */
+    public function verArquivo(EngenhariaHeader $header, EngenhariaLinha $linha): BinaryFileResponse
     {
         $this->authorize('ver', 'engenharia');
         abort_unless($linha->header_id === $header->id, 404);
         abort_unless($linha->arquivo_path && AnexoService::disco()->exists($linha->arquivo_path), 404);
 
-        return AnexoService::disco()->response($linha->arquivo_path, AnexoService::nomeOriginal($linha->arquivo_path));
+        return AnexoService::enviar($linha->arquivo_path, AnexoService::nomeOriginal($linha->arquivo_path));
     }
 
     public function removerArquivo(EngenhariaHeader $header, EngenhariaLinha $linha): JsonResponse

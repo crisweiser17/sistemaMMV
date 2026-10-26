@@ -190,7 +190,7 @@ $itemsJson = $headers->map(fn ($h) => array_merge([
                                 <td class="py-2 pr-3 whitespace-nowrap">
                                     <template x-if="l.arquivo_nome">
                                         <span class="inline-flex items-center gap-2">
-                                            <a :href="window.ENG.urls.arquivo(hid, l.id)" target="_blank" rel="noopener" class="text-accent-700 hover:underline" x-text="'📎 ' + l.arquivo_nome"></a>
+                                            <a :href="window.ENG.urls.arquivo(hid, l.id)" download class="text-accent-700 hover:underline" x-text="'📎 ' + l.arquivo_nome"></a>
                                             @can('editar', 'engenharia')<button @click="removerArquivo(l.id)" class="text-red-600 hover:underline text-xs" title="Remover arquivo">✕</button>@endcan
                                         </span>
                                     </template>
