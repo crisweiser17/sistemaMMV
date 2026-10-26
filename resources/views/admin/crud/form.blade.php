@@ -22,6 +22,14 @@
                     <x-input :label="$f['label']" :name="$f['name']" :value="$valor" readonly class="bg-gray-50 text-gray-500" />
                     <span class="block text-xs text-gray-500 mt-1">O perfil Administrador não pode ser renomeado.</span>
                 </div>
+            @elseif ($f['type'] === 'password')
+                {{-- Nunca preenchido: o valor gravado e o hash, e senha nao volta no old(). --}}
+                <div>
+                    <x-input :label="$f['label']" :name="$f['name']" type="password" value="" autocomplete="new-password" />
+                    <span class="block text-xs text-gray-500 mt-1">
+                        {{ $registro ? 'Deixe em branco para manter a senha atual.' : 'Mínimo de 8 caracteres.' }}
+                    </span>
+                </div>
             @elseif ($f['type'] === 'boolean')
                 <label class="flex items-center gap-2 text-sm text-gray-700">
                     <input type="hidden" name="{{ $f['name'] }}" value="0">

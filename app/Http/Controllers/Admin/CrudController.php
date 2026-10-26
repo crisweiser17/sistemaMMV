@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Admin;
 use App\Admin\ResourceRegistry;
 use App\Http\Controllers\Controller;
 use App\Models\Perfil;
+use App\Models\User;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -119,11 +120,21 @@ class CrudController extends Controller
         $this->exigirPodeAlterar($request, $config);
         $registro = $config['model']::findOrFail($id);
 
-        $data = $this->validateData($request, $config);
+        $data = $this->validateData($request, $config, $registro->getKey());
         // O acesso de administrador e reconhecido pelo nome do perfil: renomear o
         // Administrador tiraria de todo mundo a chance de voltar a editar perfis.
         if ($registro instanceof Perfil && $registro->ehAdministrador()) {
             $data['nome'] = Perfil::ADMINISTRADOR;
+        }
+        // Quem edita o proprio cadastro nao pode se desativar nem sair do Administrador:
+        // ficaria trancado fora da tela que desfaz isso.
+        if ($registro instanceof User && $registro->is($request->user())) {
+            if (! $data['ativo']) {
+                return back()->withInput()->with('error', 'Você não pode desativar o seu próprio usuário.');
+            }
+            if ($registro->ehAdministrador() && Perfil::find($data['perfil_id'])?->ehAdministrador() !== true) {
+                return back()->withInput()->with('error', 'Você não pode tirar o seu próprio perfil de Administrador.');
+            }
         }
         $registro->update($data);
 
@@ -140,17 +151,24 @@ class CrudController extends Controller
         if ($registro instanceof Perfil && $registro->ehAdministrador()) {
             return back()->with('error', 'O perfil Administrador não pode ser removido.');
         }
+        if ($registro instanceof User && $registro->is($request->user())) {
+            return back()->with('error', 'Você não pode excluir o seu próprio usuário.');
+        }
         $registro->delete();
 
         return redirect()->route("admin.{$config['slug']}.index")
             ->with('success', "{$config['singular']} removido.");
     }
 
-    private function validateData(Request $request, array $config): array
+    /** $id e o registro em edicao (null na criacao): substitui {id} nas regras, ex. unique. */
+    private function validateData(Request $request, array $config, ?int $id = null): array
     {
         $rules = [];
         foreach ($config['fields'] as $field) {
-            $rules[$field['name']] = $field['rules'] ?? 'nullable';
+            $rules[$field['name']] = str_replace('{id}', $id ?? 'NULL', $field['rules'] ?? 'nullable');
+            if ($field['type'] === 'password' && $id === null) {
+                $rules[$field['name']] = 'required|'.$rules[$field['name']];
+            }
             if ($field['type'] === 'permissoes') {
                 $rules[$field['name'].'.*'] = 'in:'.implode(',', array_keys(Perfil::NIVEIS));
             }
@@ -160,7 +178,12 @@ class CrudController extends Controller
         // Normalizacoes por tipo
         foreach ($config['fields'] as $field) {
             $name = $field['name'];
-            if ($field['type'] === 'boolean') {
+            if ($field['type'] === 'password') {
+                // Em branco na edicao = manter a atual. O cast 'hashed' do model criptografa.
+                if (blank($data[$name] ?? null)) {
+                    unset($data[$name]);
+                }
+            } elseif ($field['type'] === 'boolean') {
                 $data[$name] = $request->boolean($name);
             } elseif ($field['type'] === 'json') {
                 $raw = $request->input($name);

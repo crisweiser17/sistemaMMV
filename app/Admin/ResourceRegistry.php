@@ -12,6 +12,7 @@ use App\Models\ProcessoFabricacao;
 use App\Models\StatusEngenharia;
 use App\Models\TipoComponente;
 use App\Models\UnidadeMedida;
+use App\Models\User;
 
 /**
  * Registro declarativo dos cadastros de apoio.
@@ -104,6 +105,21 @@ class ResourceRegistry
                     ['name' => 'nome', 'label' => 'Nome', 'type' => 'text', 'rules' => 'required|string|max:255', 'list' => true],
                     ['name' => 'cor_hex', 'label' => 'Cor', 'type' => 'color', 'rules' => 'required|string|max:7', 'list' => true],
                     ['name' => 'ordem', 'label' => 'Ordem', 'type' => 'number', 'rules' => 'nullable|integer', 'list' => true],
+                    ['name' => 'ativo', 'label' => 'Ativo', 'type' => 'boolean', 'rules' => 'boolean', 'list' => true],
+                ],
+            ],
+            'usuarios' => [
+                'label' => 'Usuários', 'singular' => 'Usuário', 'model' => User::class,
+                // Quem entra no sistema e com qual perfil: mesma regra dos perfis.
+                'apenasAdministrador' => true,
+                'fields' => [
+                    ['name' => 'name', 'label' => 'Nome', 'type' => 'text', 'rules' => 'required|string|max:255', 'list' => true],
+                    // {id} vira o id do registro na edicao, para o proprio e-mail nao contar como repetido.
+                    ['name' => 'email', 'label' => 'E-mail', 'type' => 'email', 'rules' => 'required|email|max:255|unique:users,email,{id}', 'list' => true],
+                    // Obrigatoria so na criacao; na edicao, em branco mantem a senha atual.
+                    ['name' => 'password', 'label' => 'Senha', 'type' => 'password', 'rules' => 'nullable|string|min:8'],
+                    ['name' => 'perfil_id', 'label' => 'Perfil', 'type' => 'select', 'rules' => 'required|exists:perfis,id', 'list' => true,
+                        'optionsFrom' => [Perfil::class, 'nome'], 'display' => 'perfil.nome'],
                     ['name' => 'ativo', 'label' => 'Ativo', 'type' => 'boolean', 'rules' => 'boolean', 'list' => true],
                 ],
             ],
